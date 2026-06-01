@@ -1,5 +1,5 @@
 """
-日経225 銘柄リスト（ティッカー → 日本語名）
+日経225 銘柄リスト & 海外主要株 リスト（ティッカー → 名前）
 """
 
 NIKKEI225 = {
@@ -137,4 +137,45 @@ NIKKEI225 = {
     "7974.T": "任天堂",
     "9684.T": "スクウェア・エニックスHD",
     "3659.T": "ネクソン",
+}
+
+
+# ── 海外主要株（ティッカー → (銘柄名, 国略称)） ─────────────────────────
+# 国略称: 米=アメリカ, 英=イギリス, 独=ドイツ, 蘭=オランダ,
+#         丁=デンマーク, 台=台湾, 中=中国
+OVERSEAS_STOCKS = {
+    # アメリカ テック大手
+    "AAPL":  ("Apple",         "米"),
+    "MSFT":  ("Microsoft",     "米"),
+    "NVDA":  ("NVIDIA",        "米"),
+    "AMZN":  ("Amazon",        "米"),
+    "GOOGL": ("Alphabet",      "米"),
+    "META":  ("Meta",          "米"),
+    "TSLA":  ("Tesla",         "米"),
+    "AVGO":  ("Broadcom",      "米"),
+    "AMD":   ("AMD",           "米"),
+    "ORCL":  ("Oracle",        "米"),
+    "NFLX":  ("Netflix",       "米"),
+    "CRM":   ("Salesforce",    "米"),
+    "QCOM":  ("Qualcomm",      "米"),
+    "INTC":  ("Intel",         "米"),
+    # アメリカ 金融・その他
+    "JPM":   ("JPモルガン",    "米"),
+    "V":     ("Visa",          "米"),
+    "MA":    ("Mastercard",    "米"),
+    "XOM":   ("ExxonMobil",    "米"),
+    "WMT":   ("Walmart",       "米"),
+    "BAC":   ("BofA",          "米"),
+    "PG":    ("P&G",           "米"),
+    "HD":    ("ホームデポ",    "米"),
+    "UNH":   ("UnitedHealth",  "米"),
+    # ヨーロッパ（米国上場 ADR 含む）
+    "ASML":  ("ASML",          "蘭"),
+    "SAP":   ("SAP",           "独"),
+    "NVO":   ("ノボノルディスク", "丁"),
+    "AZN":   ("AstraZeneca",   "英"),
+    "SHEL":  ("Shell",         "英"),
+    # アジア（米国上場 ADR）
+    "TSM":   ("TSMC",          "台"),
+    "BABA":  ("Alibaba",       "中"),
 }

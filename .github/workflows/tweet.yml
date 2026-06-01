@@ -2,14 +2,16 @@ name: つむまね 自動投稿
 
 on:
   schedule:
-    # 朝8時 JST (UTC 23:00 前日)
+    # ① 朝8時 JST (UTC 23:00 前日) - 日本株 急騰・急落
     - cron: '0 23 * * *'
-    # 夜20時 JST (UTC 11:00)
+    # ③ 昼12時 JST (UTC 03:00) - 海外株 急騰・急落
+    - cron: '0 3 * * *'
+    # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP10
     - cron: '0 11 * * *'
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / evening)'
+        description: '投稿タイプ (morning / overseas / evening)'
         required: true
         default: 'morning'
 
@@ -29,8 +31,11 @@ jobs:
       - name: 依存関係をインストール
         run: pip install tweepy yfinance pandas pytz
 
-      - name: 朝ツイート（急騰・急落）
-        if: github.event_name == 'schedule' && github.event.schedule == '0 23 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'morning')
+      # ① 朝8時 JST - 日本株 急騰・急落TOP5（100株価格付き）
+      - name: 朝ツイート（日本株 急騰・急落）
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '0 23 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'morning')
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
@@ -38,8 +43,23 @@ jobs:
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
         run: cd scripts && python tweet_morning.py
 
-      - name: 夜ツイート（期待銘柄）
-        if: github.event_name == 'schedule' && github.event.schedule == '0 11 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'evening')
+      # ③ 昼12時 JST - 海外株 急騰・急落TOP5（国名付き）
+      - name: 昼ツイート（海外株 急騰・急落）
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'overseas')
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: cd scripts && python tweet_overseas.py
+
+      # ② 夜20時 JST - 期待銘柄TOP10（1ヶ月モメンタム）
+      - name: 夜ツイート（期待銘柄TOP10）
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '0 11 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'evening')
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
