@@ -1,13 +1,13 @@
 name: つむまね 自動投稿
 
 on:
-  schedule:
-    # ① 朝8時 JST (UTC 23:00 前日) - 日本株 急騰・急落
-    - cron: '0 23 * * *'
-    # ③ 昼12時 JST (UTC 03:00) - 海外株 急騰・急落
-    - cron: '0 3 * * *'
-    # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP10
-    - cron: '0 11 * * *'
+  # schedule:  # ← リリース時にコメント解除
+  #   # ① 朝8時 JST (UTC 23:00 前日) - 日本株 急騰・急落
+  #   - cron: '0 23 * * *'
+  #   # ③ 昼12時 JST (UTC 03:00) - 海外株 急騰・急落
+  #   - cron: '0 3 * * *'
+  #   # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP10
+  #   - cron: '0 11 * * *'
   workflow_dispatch:
     inputs:
       type:
