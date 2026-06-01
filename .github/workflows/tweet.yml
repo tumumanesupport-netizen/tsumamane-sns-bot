@@ -29,7 +29,7 @@ jobs:
           python-version: '3.12'
 
       - name: 依存関係をインストール
-        run: pip install tweepy yfinance pandas pytz
+        run: pip install tweepy yfinance pandas pytz requests beautifulsoup4
 
       # テスト投稿（静的ツイート）- 認証確認用
       - name: テスト投稿（認証確認）

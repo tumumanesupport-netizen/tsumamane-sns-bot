@@ -20,7 +20,7 @@ client = tweepy.Client(
     access_token_secret=os.environ["TWITTER_ACCESS_TOKEN_SECRET"],
 )
 
-PROMO = "\n📱複数の証券口座を自動集計！\n#つむまね #日本株 #投資"
+PROMO = "\nSBI・楽天など14社を一括管理📱「つむまね」\n#日本株 #株式投資 #つむまね"
 CIRCLED = "①②③④⑤"
 
 
@@ -63,25 +63,26 @@ def format_tweet(top5, bot5, last) -> str:
         name = NIKKEI225.get(ticker, ticker.replace(".T", ""))
         price = last.get(ticker, None)
         if price is not None and not pd.isna(price):
-            price_tag = f"(100株 : {fmt_100share(price)})"
+            price_tag = f"〔100株:{fmt_100share(price)}〕"
         else:
             price_tag = ""
-        rise_lines.append(f"{CIRCLED[i]}{name} +{pct:.1f}%{price_tag}")
+        rise_lines.append(f"{CIRCLED[i]} {name}　▲{pct:.1f}%{price_tag}")
 
     # ── 急落TOP5（価格なし） ─────────────────────────────────────
     fall_lines = []
     for i, (ticker, pct) in enumerate(bot5.items()):
         name = NIKKEI225.get(ticker, ticker.replace(".T", ""))
-        fall_lines.append(f"{CIRCLED[i]}{name} {pct:.1f}%")
+        fall_lines.append(f"{CIRCLED[i]} {name}　▼{abs(pct):.1f}%")
 
     def build(with_price: bool) -> str:
-        lines = [f"📊 {today} 東証 前日急騰・急落\n"]
-        lines.append("🚀 急騰TOP5")
+        lines = [f"【{today} 東証 急騰・急落 TOP5】", ""]
+        lines.append("🚀 急騰")
         lines += rise_lines if with_price else [
-            f"{CIRCLED[i]}{NIKKEI225.get(t, t.replace('.T',''))} +{p:.1f}%"
+            f"{CIRCLED[i]} {NIKKEI225.get(t, t.replace('.T',''))}　▲{p:.1f}%"
             for i, (t, p) in enumerate(top5.items())
         ]
-        lines.append("\n📉 急落TOP5")
+        lines.append("")
+        lines.append("📉 急落")
         lines += fall_lines
         lines.append(PROMO)
         return "\n".join(lines)

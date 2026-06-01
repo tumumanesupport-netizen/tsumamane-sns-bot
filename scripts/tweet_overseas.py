@@ -20,7 +20,7 @@ client = tweepy.Client(
     access_token_secret=os.environ["TWITTER_ACCESS_TOKEN_SECRET"],
 )
 
-PROMO = "\n📱SBI・楽天など14社の証券口座を一括管理\n#つむまね #米国株 #海外投資"
+PROMO = "\nSBI・楽天など14社を一括管理📱「つむまね」\n#米国株 #海外投資 #つむまね"
 CIRCLED = "①②③④⑤"
 
 
@@ -48,17 +48,18 @@ def get_overseas_movers():
 
 def format_tweet(top5, bot5) -> str:
     today = datetime.now(JST).strftime('%-m/%-d')
-    lines = [f"🌍 {today} 海外株 前日急騰・急落\n"]
+    lines = [f"【{today} 海外株 急騰・急落 TOP5】", ""]
 
-    lines.append("🚀 急騰TOP5")
+    lines.append("🚀 急騰")
     for i, (ticker, pct) in enumerate(top5.items()):
         name, country = OVERSEAS_STOCKS.get(ticker, (ticker, "?"))
-        lines.append(f"{CIRCLED[i]}{name} +{pct:.1f}%[{country}]")
+        lines.append(f"{CIRCLED[i]} {name}　▲{pct:.1f}%〔{country}〕")
 
-    lines.append("\n📉 急落TOP5")
+    lines.append("")
+    lines.append("📉 急落")
     for i, (ticker, pct) in enumerate(bot5.items()):
         name, country = OVERSEAS_STOCKS.get(ticker, (ticker, "?"))
-        lines.append(f"{CIRCLED[i]}{name} {pct:.1f}%[{country}]")
+        lines.append(f"{CIRCLED[i]} {name}　▼{abs(pct):.1f}%〔{country}〕")
 
     lines.append(PROMO)
     return "\n".join(lines)
