@@ -80,8 +80,28 @@ def main():
     try:
         response = client.create_tweet(text=tweet)
         print(f"✅ 朝ツイート成功: ID={response.data['id']}")
+    except tweepy.errors.Forbidden as e:
+        print(f"❌ 403 Forbidden エラー詳細:")
+        print(f"  message: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"  response body: {e.response.text}")
+            print(f"  status_code: {e.response.status_code}")
+            print(f"  headers: {dict(e.response.headers)}")
+        if hasattr(e, 'api_codes'):
+            print(f"  api_codes: {e.api_codes}")
+        if hasattr(e, 'api_errors'):
+            print(f"  api_errors: {e.api_errors}")
+        if hasattr(e, 'api_messages'):
+            print(f"  api_messages: {e.api_messages}")
+        raise
+    except tweepy.errors.HTTPException as e:
+        print(f"❌ HTTP エラー詳細:")
+        print(f"  message: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"  response body: {e.response.text}")
+        raise
     except Exception as e:
-        print(f"❌ 投稿エラー: {e}")
+        print(f"❌ 投稿エラー: {type(e).__name__}: {e}")
         raise
 
 
