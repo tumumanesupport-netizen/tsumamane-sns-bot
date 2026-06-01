@@ -1,10 +1,17 @@
-name: 自動ツイート投稿
+name: つむまね 自動投稿
 
 on:
   schedule:
-    # 毎日 朝9時(JST) に投稿 (UTC 0:00)
-    - cron: '0 0 * * *'
-  workflow_dispatch:  # 手動実行も可能
+    # 朝8時 JST (UTC 23:00 前日)
+    - cron: '0 23 * * *'
+    # 夜20時 JST (UTC 11:00)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+    inputs:
+      type:
+        description: '投稿タイプ (morning / evening)'
+        required: true
+        default: 'morning'
 
 jobs:
   tweet:
@@ -20,12 +27,22 @@ jobs:
           python-version: '3.12'
 
       - name: 依存関係をインストール
-        run: pip install tweepy
+        run: pip install tweepy yfinance pandas pytz
 
-      - name: ツイートを投稿
+      - name: 朝ツイート（急騰・急落）
+        if: github.event_name == 'schedule' && github.event.schedule == '0 23 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'morning')
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: python scripts/tweet.py
+        run: cd scripts && python tweet_morning.py
+
+      - name: 夜ツイート（期待銘柄）
+        if: github.event_name == 'schedule' && github.event.schedule == '0 11 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'evening')
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: cd scripts && python tweet_evening.py
