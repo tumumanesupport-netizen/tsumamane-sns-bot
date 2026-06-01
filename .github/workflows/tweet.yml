@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / overseas / evening)'
+        description: '投稿タイプ (morning / overseas / evening / test)'
         required: true
         default: 'morning'
 
@@ -30,6 +30,16 @@ jobs:
 
       - name: 依存関係をインストール
         run: pip install tweepy yfinance pandas pytz
+
+      # テスト投稿（静的ツイート）- 認証確認用
+      - name: テスト投稿（認証確認）
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'test'
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: python scripts/tweet.py
 
       # ① 朝8時 JST - 日本株 急騰・急落TOP5（100株価格付き）
       - name: 朝ツイート（日本株 急騰・急落）
