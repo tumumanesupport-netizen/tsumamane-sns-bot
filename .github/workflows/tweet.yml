@@ -2,8 +2,8 @@ name: つむまね 自動投稿
 
 on:
   schedule:
-    # 毎朝9:00 JST (UTC 00:00) - AI自動生成
-    - cron: '0 0 * * *'
+    # 毎時1回（24回/日）- AI自動生成
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       type:

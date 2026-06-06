@@ -1,13 +1,21 @@
 """
-⑦ AI自動生成投稿 - 毎朝9:00 JST
-Google News でトレンドを収集 → Claude API で投稿文を自動生成・投稿
+AI自動生成投稿 - 毎時1本（24本/日）
+時間帯ごとにテーマを変えて多様な投稿を生成
 
-PHASE 1（現在）: Google News トレンド → Claude API 生成
-PHASE 2（X Basic plan取得後）: X 上のバズ投稿も分析して精度UP
-  → get_viral_x_posts() のコメントアウトを外して有効化
+時間帯別テーマ:
+  5〜 7時: 朝活・今日の展望
+  8〜11時: 市場オープン・急騰急落
+ 12〜14時: 前場振り返り・後場注目
+ 15〜17時: 引け後分析・本日まとめ
+ 18〜23時: 長期投資・NISA・iDeCo教育
+  0〜 4時: 米国株・翌日展望
+
+PHASE 2（X Basic plan取得後）:
+  get_viral_x_posts() のコメントアウトを外してバズ投稿分析を有効化
 """
 import os
 import re
+import sys
 import tweepy
 import requests
 import anthropic
@@ -29,14 +37,37 @@ HEADERS = {
     "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
 }
 
-twitter_client = tweepy.Client(
-    consumer_key=os.environ["TWITTER_API_KEY"],
-    consumer_secret=os.environ["TWITTER_API_SECRET"],
-    access_token=os.environ["TWITTER_ACCESS_TOKEN"],
-    access_token_secret=os.environ["TWITTER_ACCESS_TOKEN_SECRET"],
-)
+# ── 時間帯別テーマ設定 ───────────────────────────────────────
+HOUR_THEMES = [
+    # (開始時, 終了時, ラベル, フォーカス, 推奨フォーマット)
+    (5,  8,  "朝活タイム",
+     "今日の市場展望・前日の米国株動向・朝イチで確認すべきこと",
+     "「今日の注目ポイント」「朝に確認すべき3つのこと」など朝活投資家向け"),
+    (8,  12, "市場オープン",
+     "急騰急落銘柄・テーマ株・今日動きそうな銘柄・出来高",
+     "「今日の注目銘柄」「急騰中の○○」など速報・ランキング形式"),
+    (12, 15, "お昼の相場",
+     "前場の振り返り・後場の注目点・今日のテーマ株・セクター動向",
+     "「前場まとめ」「後場はこれに注目」など中間レポート形式"),
+    (15, 18, "引け後分析",
+     "本日の相場まとめ・値動きの理由・明日への視点・注目銘柄",
+     "「今日の相場を振り返る」「明日注目すべき理由」など分析・考察形式"),
+    (18, 24, "夜の学習タイム",
+     "NISA・iDeCo・長期投資・高配当・資産運用の基礎知識・初心者向け解説",
+     "「知らないと損」「○○円から始める」など教育・啓発形式"),
+    (0,  5,  "深夜・米国市場",
+     "米国株・ドル円・ナスダック・S&P500・翌日の日本市場への影響",
+     "「米国株速報」「円安・円高の影響」など海外市場連動形式"),
+]
 
-ai_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+def get_hour_theme(hour: int) -> dict:
+    """現在時刻に対応するテーマを返す"""
+    for start, end, label, focus, fmt in HOUR_THEMES:
+        if start <= hour < end:
+            return {"label": label, "focus": focus, "format": fmt}
+    # fallback
+    return {"label": "投資情報", "focus": "株式投資・NISA・資産運用", "format": "自由形式"}
 
 
 # ── Twitter文字数カウント ────────────────────────────────────
@@ -62,7 +93,7 @@ def tw_len(text: str) -> int:
     return count
 
 
-# ── PHASE 1: Google News でトレンド収集 ──────────────────────
+# ── Google News でトレンド収集 ────────────────────────────────
 def gather_trend_headlines() -> list:
     """複数クエリのGoogle News RSSから今日のトレンドを収集"""
     queries = [
@@ -105,7 +136,6 @@ def gather_trend_headlines() -> list:
 
 # ── PHASE 2: X上のバズ投稿を分析（Basicプラン取得後に有効化）──
 # def get_viral_x_posts() -> list:
-#     """X検索APIでバズ投稿を取得（X API Basicプラン必要）"""
 #     bearer_token = os.environ.get("TWITTER_BEARER_TOKEN")
 #     if not bearer_token:
 #         return []
@@ -133,49 +163,38 @@ def gather_trend_headlines() -> list:
 
 
 # ── Claude API で投稿文を生成 ─────────────────────────────────
-def generate_tweet(headlines: list, viral_posts: list = None) -> str | None:
-    """Claude APIでトレンドに基づいた高インプレッション投稿を生成"""
-    today = datetime.now(JST).strftime('%-m月%-d日（%a）')
+def generate_tweet(headlines: list, theme: dict, now: datetime) -> str | None:
+    """Claude APIでトレンド×時間帯テーマに基づいた投稿を生成"""
+    date_str = now.strftime('%-m月%-d日')
+    time_str = now.strftime('%-H時')
     headlines_text = "\n".join(f"・{h}" for h in headlines)
 
-    viral_section = ""
-    if viral_posts:
-        viral_text = "\n".join(f"・{p}" for p in viral_posts)
-        viral_section = f"""
-## 今日Xでバズっている投稿（参考）
-{viral_text}
-"""
-
     prompt = f"""あなたは日本の株式投資アプリ「つむまね」のSNSマネージャーです。
-今日は{today}です。個人投資家・NISA初心者・投資中級者をターゲットにしています。
+今は{date_str} {time_str}です。
 
-以下のトレンドニュースを参考に、Xで高いインプレッションを獲得できる投稿文を1つ作成してください。
-{viral_section}
-## 今日のトレンドニュース
+━━ 今の時間帯: {theme['label']} ━━
+この時間帯のフォーカス: {theme['focus']}
+推奨フォーマット: {theme['format']}
+
+━━ 今日のトレンドニュース ━━
 {headlines_text}
 
-## 絶対に守るルール
-1. 文字数: 日本語1文字=2、英数字=1、URLは必ず23文字として計算し、合計280以内
-2. 末尾に必ずこのURL（URLはそのままコピー）: {APP_URL}
-3. ハッシュタグ3〜4個、最後に必ず「#つむまね」を含める
-4. 投稿文のみ出力（説明・コメント・「投稿文:」などの前置き一切不要）
+━━ 絶対に守るルール ━━
+1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算し、合計【280以内】
+2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
+3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
+4. 投稿文のみ出力（説明・前置き・「投稿文:」などは一切不要）
+5. 直前の投稿と被らない角度・切り口にすること
 
-## 高インプレッションを出すコツ
-- 数値・パーセンテージを入れると信頼感UP（例: 年利3.5%、月1万円）
-- 「知らないと損」「○○してみた」「実は○○だった」は反応が良い
-- 疑問形で始めると返信・引用が増える
-- 絵文字は冒頭と重要ポイントに1〜2個（多すぎ注意）
-- ランキング形式（①②③）は保存率が高い
-- ニュースへの「自分の意見・コメント」があると差別化になる
-- アプリ紹介は押しつけがましくなく、自然な流れで
+━━ 高インプレッションを出すコツ ━━
+・数値・パーセンテージを入れる（年利3.5%・月1万円・○%増など）
+・「知らないと損」「実は○○だった」「○○してみた」は反応が良い
+・疑問形で始めると返信・引用が増える
+・絵文字は冒頭と重要ポイントに適度に（多すぎ注意）
+・ランキング形式（①②③）は保存率が高い
+・アプリ紹介は自然な流れで、押しつけがましくなく
 
-## 参考フォーマット（いずれか1つを選んで応用）
-A) 疑問形+データ: 「○○って知ってた？\n実は...\n\n詳しくはアプリで確認👇\n[URL]\n#タグ」
-B) ランキング: 「今週注目の○○TOP3🔥\n①...\n②...\n③...\n\nつむまねで全銘柄チェック📱\n[URL]\n#タグ」
-C) 驚き+解説: 「○○が△△！\nその理由は...\n\n[URL]\n#タグ」
-D) 呼びかけ型: 「NISAを始めたい人へ📣\n・...\n・...\n・...\n[URL]\n#タグ」
-
-今日のニュースを参考に、上記以外の独自のアイデアも歓迎。"""
+投稿文のみ出力してください。"""
 
     try:
         message = ai_client.messages.create(
@@ -189,29 +208,22 @@ D) 呼びかけ型: 「NISAを始めたい人へ📣\n・...\n・...\n・...\n[U
         return None
 
 
-# ── 生成テキストのクリーニング ────────────────────────────────
+# ── クリーニング＆バリデーション ─────────────────────────────
 def clean_tweet(text: str) -> str:
     """AI出力から余計な説明文を除去"""
-    # 「投稿文：」などの前置きを除去
-    patterns = [
-        r'^(投稿文|ツイート|X投稿|以下|出力)[：:]\s*',
-        r'^```[^\n]*\n', r'\n```$',
-    ]
-    for p in patterns:
+    for p in [r'^(投稿文|ツイート|X投稿|以下|出力)[：:]\s*', r'^```[^\n]*\n', r'\n```$']:
         text = re.sub(p, '', text, flags=re.MULTILINE).strip()
-    # 先頭が「」や「」なら除去
     text = re.sub(r'^[「」『』]', '', text).strip()
     return text
 
 
-# ── バリデーション ────────────────────────────────────────────
 def validate_tweet(text: str) -> str | None:
     """URLと#つむまねの存在確認、文字数チェック"""
     if APP_URL not in text:
-        print(f"  ✗ App StoreリンクなしでNG")
+        print("  ✗ App StoreリンクなしでNG")
         return None
     if "#つむまね" not in text:
-        print(f"  ✗ #つむまねなしでNG")
+        print("  ✗ #つむまねなしでNG")
         return None
     length = tw_len(text)
     if length > MAX_CHARS:
@@ -222,27 +234,39 @@ def validate_tweet(text: str) -> str | None:
 
 # ── メイン ────────────────────────────────────────────────
 def main():
-    print("🤖 AI自動生成投稿 開始...")
+    # APIキー未設定の場合はエラーメールを送らず静かに終了
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("⚠️ ANTHROPIC_API_KEY 未設定 - スキップします（エラーではありません）")
+        sys.exit(0)
+
+    global ai_client, twitter_client
+    ai_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    twitter_client = tweepy.Client(
+        consumer_key=os.environ["TWITTER_API_KEY"],
+        consumer_secret=os.environ["TWITTER_API_SECRET"],
+        access_token=os.environ["TWITTER_ACCESS_TOKEN"],
+        access_token_secret=os.environ["TWITTER_ACCESS_TOKEN_SECRET"],
+    )
+
+    now = datetime.now(JST)
+    hour = now.hour
+    theme = get_hour_theme(hour)
+
+    print(f"🤖 AI自動生成投稿 開始（{now.strftime('%-H:%M')} / {theme['label']}）")
 
     # 1. トレンド収集
     headlines = gather_trend_headlines()
     print(f"  トレンドニュース: {len(headlines)}件")
-    for h in headlines:
-        print(f"    - {h}")
 
     if not headlines:
         print("❌ ニュース取得失敗 - スキップします")
         return
 
-    # PHASE 2: バズ投稿を追加（有効化するにはコメントアウトを外す）
-    # viral_posts = get_viral_x_posts()
-    viral_posts = []
-
     # 2. AI生成（最大3回リトライ）
     tweet = None
     for attempt in range(1, 4):
         print(f"  AI生成 試行{attempt}/3...")
-        raw = generate_tweet(headlines, viral_posts)
+        raw = generate_tweet(headlines, theme, now)
         if not raw:
             continue
         raw = clean_tweet(raw)
