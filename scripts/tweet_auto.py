@@ -1,6 +1,6 @@
 """
-AI自動生成投稿 - 毎時1本（24本/日）
-時間帯ごとにテーマを変えて多様な投稿を生成
+AI自動生成投稿 - 30分ごと（48本/日）
+時間帯ごとにテーマを変え、「公式配信」と「個人コメント」を交互に投稿
 
 時間帯別テーマ:
   5〜 7時: 朝活・今日の展望
@@ -9,6 +9,13 @@ AI自動生成投稿 - 毎時1本（24本/日）
  15〜17時: 引け後分析・本日まとめ
  18〜23時: 長期投資・NISA・iDeCo教育
   0〜 4時: 米国株・翌日展望
+
+投稿スタイル（分で交互）:
+  :00 → 公式配信スタイル（データ・断言系）
+  :30 → 個人コメントスタイル（体験・共感系）
+
+つむまね機能アピール（ローテーション）:
+  複数証券口座の管理 / 資産管理 / 資産シミュレーション など
 
 PHASE 2（X Basic plan取得後）:
   get_viral_x_posts() のコメントアウトを外してバズ投稿分析を有効化
@@ -66,8 +73,56 @@ def get_hour_theme(hour: int) -> dict:
     for start, end, label, focus, fmt in HOUR_THEMES:
         if start <= hour < end:
             return {"label": label, "focus": focus, "format": fmt}
-    # fallback
     return {"label": "投資情報", "focus": "株式投資・NISA・資産運用", "format": "自由形式"}
+
+
+# ── 投稿スタイル設定（:00=公式 / :30=個人コメント 交互） ─────────
+POST_STYLES = {
+    "official": {
+        "label": "公式配信スタイル",
+        "instruction": (
+            "権威ある情報発信者として書く。\n"
+            "・「〜が重要です」「〜を確認しましょう」「〜のポイントをまとめました」など断言・まとめ系\n"
+            "・数字・データ・事実を中心に構成し、信頼感を出す\n"
+            "・絵文字は📊📈📉💹🔔など情報系を使う\n"
+            "・テンポよく箇条書きや番号リストを活用する"
+        ),
+    },
+    "personal": {
+        "label": "個人コメントスタイル",
+        "instruction": (
+            "一般の個人投資家が気軽に呟くような口調で書く。\n"
+            "・「〜してみた」「〜だよね」「〜って知ってた？」「正直〜」など体験・共感系\n"
+            "・失敗談・気づき・驚きを含めると親近感が増す\n"
+            "・絵文字は😅🤔💡🙌😮✨など感情系を使う\n"
+            "・アプリは「使ってみたら便利だった」的な自然な口コミ推薦にする"
+        ),
+    },
+}
+
+
+def get_post_style(minute: int) -> dict:
+    """分が0なら公式、30なら個人コメントスタイルを返す"""
+    return POST_STYLES["personal"] if minute >= 30 else POST_STYLES["official"]
+
+
+# ── つむまねの機能アピール（ローテーション） ─────────────────────
+APP_FEATURES = [
+    "複数の証券口座（SBI・楽天・マネックス・松井など）をまとめて管理できるのが「つむまね」",
+    "全口座の資産を一画面で把握できる資産管理アプリが「つむまね」",
+    "老後の資産を将来シミュレーションできるのが「つむまね」",
+    "NISA・iDeCo口座の残高もひとまとめに確認できるのが「つむまね」",
+    "配当金・分配金の受取履歴を口座横断で自動管理できるのが「つむまね」",
+    "保有株のポートフォリオをグラフで可視化できるのが「つむまね」",
+    "各口座の損益をリアルタイムで比較・確認できるのが「つむまね」",
+    "投資初心者でも直感的に使いやすい資産管理アプリが「つむまね」",
+]
+
+
+def get_app_feature(hour: int, minute: int) -> str:
+    """時刻から今回アピールするつむまね機能を選ぶ（ローテーション）"""
+    index = (hour * 2 + (1 if minute >= 30 else 0)) % len(APP_FEATURES)
+    return APP_FEATURES[index]
 
 
 # ── Twitter文字数カウント ────────────────────────────────────
@@ -163,10 +218,16 @@ def gather_trend_headlines() -> list:
 
 
 # ── Claude API で投稿文を生成 ─────────────────────────────────
-def generate_tweet(headlines: list, theme: dict, now: datetime) -> str | None:
-    """Claude APIでトレンド×時間帯テーマに基づいた投稿を生成"""
+def generate_tweet(
+    headlines: list,
+    theme: dict,
+    now: datetime,
+    style_info: dict,
+    feature: str,
+) -> str | None:
+    """Claude APIでトレンド×時間帯テーマ×スタイルに基づいた投稿を生成"""
     date_str = now.strftime('%-m月%-d日')
-    time_str = now.strftime('%-H時')
+    time_str = now.strftime('%-H時%-M分')
     headlines_text = "\n".join(f"・{h}" for h in headlines)
 
     prompt = f"""あなたは日本の株式投資アプリ「つむまね」のSNSマネージャーです。
@@ -176,6 +237,13 @@ def generate_tweet(headlines: list, theme: dict, now: datetime) -> str | None:
 この時間帯のフォーカス: {theme['focus']}
 推奨フォーマット: {theme['format']}
 
+━━ 今回の投稿スタイル: {style_info['label']} ━━
+{style_info['instruction']}
+
+━━ 今回アピールするつむまねの機能（必ず1文入れること） ━━
+{feature}
+→ 投稿の流れに合わせて自然に1文だけ入れる（ゴリ押しにならないように）
+
 ━━ 今日のトレンドニュース ━━
 {headlines_text}
 
@@ -184,7 +252,7 @@ def generate_tweet(headlines: list, theme: dict, now: datetime) -> str | None:
 2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
 3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
 4. 投稿文のみ出力（説明・前置き・「投稿文:」などは一切不要）
-5. 直前の投稿と被らない角度・切り口にすること
+5. 前の投稿と異なる角度・切り口にすること
 
 ━━ 高インプレッションを出すコツ ━━
 ・数値・パーセンテージを入れる（年利3.5%・月1万円・○%増など）
@@ -250,9 +318,16 @@ def main():
 
     now = datetime.now(JST)
     hour = now.hour
-    theme = get_hour_theme(hour)
+    minute = now.minute
 
-    print(f"🤖 AI自動生成投稿 開始（{now.strftime('%-H:%M')} / {theme['label']}）")
+    theme = get_hour_theme(hour)
+    style_info = get_post_style(minute)
+    feature = get_app_feature(hour, minute)
+
+    print(f"🤖 AI自動生成投稿 開始")
+    print(f"  時刻: {now.strftime('%-H:%M')} / テーマ: {theme['label']}")
+    print(f"  スタイル: {style_info['label']}")
+    print(f"  機能アピール: {feature}")
 
     # 1. トレンド収集
     headlines = gather_trend_headlines()
@@ -266,7 +341,7 @@ def main():
     tweet = None
     for attempt in range(1, 4):
         print(f"  AI生成 試行{attempt}/3...")
-        raw = generate_tweet(headlines, theme, now)
+        raw = generate_tweet(headlines, theme, now, style_info, feature)
         if not raw:
             continue
         raw = clean_tweet(raw)
