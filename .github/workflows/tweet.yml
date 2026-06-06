@@ -2,26 +2,14 @@ name: つむまね 自動投稿
 
 on:
   schedule:
-    # ① 朝8時 JST (UTC 23:00 前日) - 日本株 急騰・急落
-    - cron: '0 23 * * *'
-    # ③ 昼12時 JST (UTC 03:00) - 海外株 急騰・急落
-    - cron: '0 3 * * *'
-    # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP5
-    - cron: '0 11 * * *'
-    # ④ 月曜朝7時 JST (UTC 22:00 日曜) - IPO情報
-    - cron: '0 22 * * 0'
-    # ⑤ 土曜朝8時 JST (UTC 23:00 金曜) - 週次まとめ
-    - cron: '0 23 * * 5'
-    # ⑥ 平日15:30 JST (UTC 06:30) - テーマ株
-    - cron: '30 6 * * 1-5'
-    # ⑦ 毎朝9:00 JST (UTC 00:00) - AI自動生成
+    # 毎朝9:00 JST (UTC 00:00) - AI自動生成
     - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / overseas / evening / ipo / weekly / theme / auto / test / release)'
+        description: '投稿タイプ (auto / release / test)'
         required: true
-        default: 'morning'
+        default: 'auto'
 
 jobs:
   tweet:
@@ -39,90 +27,10 @@ jobs:
       - name: 依存関係をインストール
         run: pip install tweepy yfinance pandas pytz requests beautifulsoup4 anthropic
 
-      # テスト投稿（静的ツイート）- 認証確認用
-      - name: テスト投稿（認証確認）
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'test'
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: python scripts/tweet.py
-
-      # ① 朝8時 JST - 日本株 急騰・急落TOP5（100株価格付き）
-      - name: 朝ツイート（日本株 急騰・急落）
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 23 * * *') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'morning')
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_morning.py
-
-      # ③ 昼12時 JST - 海外株 急騰・急落TOP5（国名付き）
-      - name: 昼ツイート（海外株 急騰・急落）
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'overseas')
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_overseas.py
-
-      # 🎉 リリース告知（手動のみ）
-      - name: リリース告知ツイート
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'release'
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: python scripts/tweet_release.py
-
-      # ② 夜20時 JST - 期待銘柄TOP5
-      - name: 夜ツイート（期待銘柄TOP5）
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 11 * * *') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'evening')
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_evening.py
-
-      # ④ 月曜朝7時 JST - IPO注目情報（スケジュール＋ニュース）
-      - name: IPO情報ツイート
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 22 * * 0') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'ipo')
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_ipo.py
-
-      # ⑥ 平日15:30 JST - テーマ株（半導体/AI/防衛/インバウンド/高配当）
-      - name: テーマ株ツイート
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 1-5') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'theme')
-        env:
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_theme.py
-
-      # ⑦ 毎朝9:00 JST - AI自動生成投稿（トレンド分析 → Claude API生成）
+      # AI自動生成投稿（毎朝9:00 JST）
       - name: AI自動生成ツイート
         if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 0 * * *') ||
+          (github.event_name == 'schedule') ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'auto')
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
@@ -132,19 +40,27 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: cd scripts && python tweet_auto.py
 
-      # ⑤ 土曜朝8時 JST - 週次まとめ（出来高急増＋ニュース＋IPO）
-      - name: 週次まとめツイート
-        if: >
-          (github.event_name == 'schedule' && github.event.schedule == '0 23 * * 5') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'weekly')
+      # リリース告知（手動のみ）
+      - name: リリース告知ツイート
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'release'
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
-        run: cd scripts && python tweet_weekly.py
+        run: python scripts/tweet_release.py
 
-      # ─── エラー時メール通知（いずれかのステップが失敗したとき） ───
+      # テスト投稿（認証確認用・手動のみ）
+      - name: テスト投稿（認証確認）
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'test'
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: python scripts/tweet.py
+
+      # エラー時メール通知
       - name: エラー通知メール
         if: failure()
         uses: dawidd6/action-send-mail@v3
@@ -167,7 +83,6 @@ jobs:
             ワークフロー : ${{ github.workflow }}
             トリガー     : ${{ github.event_name }}
             投稿タイプ   : ${{ github.event.inputs.type || 'スケジュール自動実行' }}
-            実行日時(UTC): ${{ github.event.repository.updated_at }}
             実行ID       : ${{ github.run_id }}
             ─────────────────────────────
 
