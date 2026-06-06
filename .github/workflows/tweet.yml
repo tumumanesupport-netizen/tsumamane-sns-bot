@@ -6,12 +6,14 @@ on:
     - cron: '0 23 * * *'
     # ③ 昼12時 JST (UTC 03:00) - 海外株 急騰・急落
     - cron: '0 3 * * *'
-    # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP10
+    # ② 夜20時 JST (UTC 11:00) - 期待銘柄TOP5
     - cron: '0 11 * * *'
+    # ④ 月曜朝7時 JST (UTC 22:00 日曜) - IPO情報
+    - cron: '0 22 * * 0'
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / overseas / evening / test / release)'
+        description: '投稿タイプ (morning / overseas / evening / ipo / test / release)'
         required: true
         default: 'morning'
 
@@ -75,8 +77,8 @@ jobs:
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
         run: python scripts/tweet_release.py
 
-      # ② 夜20時 JST - 期待銘柄TOP10（1ヶ月モメンタム）
-      - name: 夜ツイート（期待銘柄TOP10）
+      # ② 夜20時 JST - 期待銘柄TOP5
+      - name: 夜ツイート（期待銘柄TOP5）
         if: >
           (github.event_name == 'schedule' && github.event.schedule == '0 11 * * *') ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'evening')
@@ -86,3 +88,15 @@ jobs:
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
         run: cd scripts && python tweet_evening.py
+
+      # ④ 月曜朝7時 JST - IPO注目情報（スケジュール＋ニュース）
+      - name: IPO情報ツイート
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '0 22 * * 0') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'ipo')
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: cd scripts && python tweet_ipo.py
