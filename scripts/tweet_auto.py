@@ -1,14 +1,14 @@
 """
 AI自動生成投稿 - 30分ごと（48本/日）
 
-スタイル交互:
-  :00 → 公式配信スタイル
-        今日の金融トレンドニュースをデータ・断言系で発信
-  :30 → 個人コメントスタイル
-        投資コミュニティで話題の体験談・声をインフルエンサー口調で発信
+文字数管理:
+  URLとハッシュタグはコード側で付加。
+  Claudeには本文のみを生成させ、ウェイト上限を明示して超過を防ぐ。
+  それでも超過した場合は末尾から1行ずつ削って強制収納。
 
-つむまね機能:
-  8種の機能から投稿内容に最も自然に合うものをClaudeが選んで挿入
+スタイル交互:
+  :00 → 公式配信スタイル（市場ニュース × データ断言系）
+  :30 → 個人コメントスタイル（コミュニティ体験談 × インフルエンサー口調）
 
 PHASE 2（X Basic plan取得後）:
   get_viral_x_posts() のコメントアウトを外してバズ投稿分析を有効化
@@ -37,54 +37,40 @@ HEADERS = {
     "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
 }
 
-# ── 時間帯別テーマ設定 ───────────────────────────────────────
+# ── 時間帯別テーマ ────────────────────────────────────────────
 HOUR_THEMES = [
     (5,  8,  "朝活タイム",
      "今日の市場展望・前日の米国株動向・朝イチで確認すべきこと",
-     "「今日の注目ポイント」「朝に確認すべき3つのこと」など朝活投資家向け"),
+     "朝活投資家向け"),
     (8,  12, "市場オープン",
      "急騰急落銘柄・テーマ株・今日動きそうな銘柄・出来高",
-     "「今日の注目銘柄」「急騰中の○○」など速報・ランキング形式"),
+     "速報・ランキング形式"),
     (12, 15, "お昼の相場",
-     "前場の振り返り・後場の注目点・今日のテーマ株・セクター動向",
-     "「前場まとめ」「後場はこれに注目」など中間レポート形式"),
+     "前場の振り返り・後場の注目点・今日のテーマ株",
+     "中間レポート形式"),
     (15, 18, "引け後分析",
-     "本日の相場まとめ・値動きの理由・明日への視点・注目銘柄",
-     "「今日の相場を振り返る」「明日注目すべき理由」など分析・考察形式"),
+     "本日の相場まとめ・値動きの理由・明日への視点",
+     "分析・考察形式"),
     (18, 24, "夜の学習タイム",
-     "NISA・iDeCo・長期投資・高配当・資産運用の基礎知識・初心者向け解説",
-     "「知らないと損」「○○円から始める」など教育・啓発形式"),
+     "NISA・iDeCo・長期投資・高配当・資産運用の基礎",
+     "教育・啓発形式"),
     (0,  5,  "深夜・米国市場",
      "米国株・ドル円・ナスダック・S&P500・翌日の日本市場への影響",
-     "「米国株速報」「円安・円高の影響」など海外市場連動形式"),
+     "海外市場連動形式"),
 ]
 
-
-def get_hour_theme(hour: int) -> dict:
-    for start, end, label, focus, fmt in HOUR_THEMES:
-        if start <= hour < end:
-            return {"label": label, "focus": focus, "format": fmt}
-    return {"label": "投資情報", "focus": "株式投資・NISA・資産運用", "format": "自由形式"}
-
-
-# ── 投稿スタイル（:00=公式 / :30=個人コメント） ────────────────
-POST_STYLES = {
-    "official": {
-        "name": "official",
-        "label": "公式配信スタイル",
-    },
-    "personal": {
-        "name": "personal",
-        "label": "個人コメントスタイル",
-    },
+# ── テーマ別ハッシュタグ（コード側で付加・Claudeには生成させない）──
+THEME_HASHTAGS = {
+    "朝活タイム":     "#朝活投資 #日本株 #市場展望 #つむまね",
+    "市場オープン":   "#日本株 #急騰急落 #注目銘柄 #つむまね",
+    "お昼の相場":     "#前場 #後場 #日本株 #つむまね",
+    "引け後分析":     "#日本株 #相場分析 #投資 #つむまね",
+    "夜の学習タイム": "#NISA #iDeCo #資産運用 #つむまね",
+    "深夜・米国市場": "#米国株 #ドル円 #海外投資 #つむまね",
+    "投資情報":       "#投資 #資産運用 #NISA #つむまね",
 }
 
-
-def get_post_style(minute: int) -> dict:
-    return POST_STYLES["personal"] if minute >= 30 else POST_STYLES["official"]
-
-
-# ── つむまねの機能リスト（Claudeが最適なものを1つ選ぶ） ──────────
+# ── つむまねの機能リスト（Claudeが文脈に合う1つを選んで1文入れる）──
 APP_FEATURES = [
     "複数の証券口座（SBI・楽天・マネックス・松井など）をまとめて一括管理できる",
     "全口座の資産残高を一画面でリアルタイム把握できる",
@@ -95,6 +81,31 @@ APP_FEATURES = [
     "各口座の損益をリアルタイムで横断比較できる",
     "投資初心者でも直感的に使えるシンプルなUIで資産管理できる",
 ]
+
+
+def get_hour_theme(hour: int) -> dict:
+    for start, end, label, focus, fmt in HOUR_THEMES:
+        if start <= hour < end:
+            return {"label": label, "focus": focus, "format": fmt}
+    return {"label": "投資情報", "focus": "株式投資・NISA・資産運用", "format": "自由形式"}
+
+
+def get_post_style(minute: int) -> dict:
+    if minute >= 30:
+        return {"name": "personal", "label": "個人コメントスタイル"}
+    return {"name": "official", "label": "公式配信スタイル"}
+
+
+# ── フッター（URL＋ハッシュタグ）の構築と文字数計算 ─────────────
+def build_footer(theme: dict) -> str:
+    """URLとハッシュタグをコード側で組み立てる"""
+    hashtags = THEME_HASHTAGS.get(theme['label'], THEME_HASHTAGS['投資情報'])
+    return f"\n{APP_URL}\n{hashtags}"
+
+
+def get_body_budget(footer: str) -> int:
+    """本文に使える最大ウェイト文字数（安全マージン5込み）"""
+    return MAX_CHARS - tw_len(footer) - 5
 
 
 # ── Twitter文字数カウント ────────────────────────────────────
@@ -122,7 +133,6 @@ def tw_len(text: str) -> int:
 
 # ── RSS取得ユーティリティ ─────────────────────────────────────
 def _fetch_rss_titles(url: str, limit: int = 3) -> list[str]:
-    """RSSフィードからタイトルを取得（失敗時は空リスト）"""
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
@@ -140,16 +150,16 @@ def _fetch_rss_titles(url: str, limit: int = 3) -> list[str]:
         return []
 
 
-def _google_news_url(query: str) -> str:
+def _gnews(query: str) -> str:
     return (
         "https://news.google.com/rss/search"
         f"?q={query.replace(' ', '+')}&hl=ja&gl=JP&ceid=JP:ja"
     )
 
 
-# ── ① 公式配信用: 金融トレンドニュース ─────────────────────────
+# ── ニュース収集 ──────────────────────────────────────────────
 def gather_market_news() -> list[str]:
-    """金融・経済の最新ニュースを幅広く収集（公式スタイル向け）"""
+    """公式スタイル向け: 金融・経済の最新ニュース"""
     queries = [
         "日経平均 株価 今日",
         "日本株 急騰 急落 注目銘柄",
@@ -162,19 +172,16 @@ def gather_market_news() -> list[str]:
         "日本銀行 金利 利上げ",
         "IPO 新規上場 注目",
     ]
-    headlines = []
-    seen = set()
+    seen, result = set(), []
     for q in queries:
-        for title in _fetch_rss_titles(_google_news_url(q), limit=2):
-            if title not in seen:
-                seen.add(title)
-                headlines.append(title)
-    return headlines[:15]
+        for t in _fetch_rss_titles(_gnews(q), 2):
+            if t not in seen:
+                seen.add(t); result.append(t)
+    return result[:15]
 
 
-# ── ② 個人コメント用: 投資コミュニティの声・体験談 ──────────────
 def gather_community_buzz() -> list[str]:
-    """投資家コミュニティで話題の体験談・口コミ系ニュースを収集（個人スタイル向け）"""
+    """個人スタイル向け: 投資コミュニティの体験談・口コミ系"""
     queries = [
         "NISA 始めた 体験 口コミ 実際",
         "個人投資家 資産 増えた 実感",
@@ -183,18 +190,16 @@ def gather_community_buzz() -> list[str]:
         "iDeCo デメリット 知らなかった",
         "新NISA やってみた 正直",
         "株式投資 失敗 学んだ",
-        "資産運用 初心者 変わった 生活",
         "FIRE 目指す 投資 方法",
         "インデックス投資 積立 長期",
+        "資産運用 初心者 変わった",
     ]
-    buzz = []
-    seen = set()
+    seen, result = set(), []
     for q in queries:
-        for title in _fetch_rss_titles(_google_news_url(q), limit=2):
-            if title not in seen:
-                seen.add(title)
-                buzz.append(title)
-    return buzz[:15]
+        for t in _fetch_rss_titles(_gnews(q), 2):
+            if t not in seen:
+                seen.add(t); result.append(t)
+    return result[:15]
 
 
 # ── PHASE 2: X上のバズ投稿を分析（Basicプラン取得後に有効化）──
@@ -216,7 +221,7 @@ def gather_community_buzz() -> list[str]:
 #             if resp.data:
 #                 for tweet in resp.data:
 #                     m = tweet.public_metrics
-#                     score = m['like_count'] * 3 + m['retweet_count'] * 2 + m['reply_count']
+#                     score = m['like_count']*3 + m['retweet_count']*2 + m['reply_count']
 #                     if score > 50:
 #                         viral.append({"text": tweet.text, "score": score})
 #         except Exception:
@@ -225,97 +230,85 @@ def gather_community_buzz() -> list[str]:
 #     return [v["text"][:100] for v in viral[:5]]
 
 
-# ── Claude API で投稿文を生成 ─────────────────────────────────
-def generate_tweet(
+# ── Claude API で本文のみ生成 ─────────────────────────────────
+def generate_body(
     market_news: list[str],
     community_buzz: list[str],
     theme: dict,
     now: datetime,
     style_info: dict,
+    body_budget: int,
 ) -> str | None:
-    """スタイルに応じてニュースソースとプロンプトを切り替えて投稿文を生成"""
-
+    """
+    本文のみを生成（URLとハッシュタグはコード側で付加するので含めない）。
+    body_budget: 本文に使えるTwitterウェイト上限
+    """
     date_str = now.strftime('%-m月%-d日')
     time_str = now.strftime('%-H時%-M分')
     features_text = "\n".join(f"  ・{f}" for f in APP_FEATURES)
-
     is_personal = style_info["name"] == "personal"
 
+    # 本文サイズ感の日本語目安（全角換算）
+    jp_char_estimate = body_budget // 2
+
     if is_personal:
-        # ── 個人コメントスタイル ──────────────────────────────
         buzz_text = "\n".join(f"・{b}" for b in community_buzz)
-        news_sub  = "\n".join(f"・{n}" for n in market_news[:5])
+        news_sub  = "\n".join(f"・{n}" for n in market_news[:4])
+        role_and_style = f"""あなたはフォロワー数5万人以上の人気個人投資家インフルエンサーです。
+今は{date_str} {time_str}。テーマ: {theme['label']}
 
-        prompt = f"""あなたはフォロワー数5万人以上の人気個人投資家インフルエンサーです。
-今は{date_str} {time_str}。テーマ時間帯: {theme['label']}
-
-━━ 今、投資コミュニティで話題になっていること ━━
-（これらは投資家たちが実際に語っているリアルな体験・関心事のトレンドです）
+━━ 投資コミュニティで今話題になっていること ━━
+（投資家たちがSNSや口コミで語っているリアルな体験・関心事）
 {buzz_text}
 
-━━ 今日の市場の動き（参考） ━━
+━━ 今日の市場（参考） ━━
 {news_sub}
 
 ━━ あなたの投稿スタイル ━━
-・フォロワーへの「語りかけ」や「共感呼びかけ」が上手い
-・「正直〜」「これ知らなかった😅」「みんなも気になってるはず」「〜してみた結果」など
-  体験談・気づき・驚きを混ぜる
-・数字や体験に基づくリアルさが信頼感を生む
-・絵文字は😅🤔💡🙌✨😮を感情に合わせて自然に使う
-・上から目線にならず、同じ投資家目線で話す
-・「最近こんな声をよく聞くんだけど〜」「投資仲間と話してたら〜」みたいな語り口もOK
-
-━━ つむまねの機能を1文だけ自然に入れること ━━
-以下の中から投稿内容に最も自然に合う機能を1つだけ選んで、
-「つむまね」というアプリ名と一緒に口コミ感覚で紹介する:
-{features_text}
-
-━━ 絶対に守るルール ━━
-1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算、合計【280以内】
-2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
-3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
-4. 投稿文のみ出力（前置き・説明・「投稿文:」などは一切不要）
-5. 前の投稿と異なる切り口にすること
-
-投稿文のみ出力してください。"""
-
+・「正直〜」「これ知らなかった😅」「みんなも気になってるはず」「〜してみた」など
+  体験・気づき・共感を混ぜる
+・同じ投資家目線で語りかける（上から目線NG）
+・「最近こんな声をよく聞く」「投資仲間と話してたら〜」的な語り口もOK
+・絵文字は😅🤔💡🙌✨😮を感情に合わせて自然に"""
     else:
-        # ── 公式配信スタイル ──────────────────────────────────
         news_text = "\n".join(f"・{n}" for n in market_news)
+        role_and_style = f"""あなたは権威ある投資情報メディアの編集長です。
+今は{date_str} {time_str}。テーマ: {theme['label']}（{theme['focus']}）
 
-        prompt = f"""あなたは権威ある投資情報メディアの編集長です。
-今は{date_str} {time_str}。テーマ時間帯: {theme['label']}（{theme['focus']}）
-
-━━ 今日のリアルタイム金融トレンド（これをベースに投稿を作成） ━━
+━━ 今日のリアルタイム金融トレンド ━━
 {news_text}
 
-━━ 公式配信スタイルの要件 ━━
-・上記のトレンドの中から最も今日インパクトのある話題を選んで発信
-・「〜が重要です」「〜を押さえておきましょう」「〜のポイントをまとめました」など
-  断言・まとめ系の権威ある語り口
-・数字・パーセンテージ・具体的事実を積極的に使う（例: 年利3.5%・+○%・○億円）
-・絵文字は📊📈📉💹🔔📰💰など情報・金融系を使う
-・ランキング（①②③）や箇条書きは保存率・シェア率が高い
-・今日のニュースに直接触れた「時事性」が命
+━━ あなたの投稿スタイル ━━
+・上記トレンドの中から最もインパクトのある話題を選んで発信
+・「〜が重要です」「〜を押さえておきましょう」など断言・まとめ系
+・数字・パーセンテージ・具体的事実を積極的に使う
+・絵文字は📊📈📉💹🔔📰💰など金融系
+・ランキング（①②③）や箇条書きは保存率・シェア率が高い"""
 
-━━ つむまねの機能を1文だけ自然に入れること ━━
+    prompt = f"""{role_and_style}
+
+━━ つむまねの機能を末尾に1文だけ自然に入れること ━━
 以下の中から投稿内容に最も自然に合う機能を1つだけ選んで、
-「つむまね」というアプリ名と一緒に権威ある紹介文として添える:
+「つむまね」というアプリ名と一緒に紹介する（URLは不要）:
 {features_text}
 
-━━ 絶対に守るルール ━━
-1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算、合計【280以内】
-2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
-3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
-4. 投稿文のみ出力（前置き・説明・「投稿文:」などは一切不要）
-5. 前の投稿と異なる切り口にすること
+━━ 生成ルール（厳守） ━━
+1. 【本文のみ】を生成する
+   - URLは含めない（自動で付加します）
+   - ハッシュタグ（#で始まる語）は含めない（自動で付加します）
+2. 本文のTwitterウェイト文字数を【{body_budget}以内】に収める
+   - 日本語1文字=2、英数字=1、絵文字=2で計算
+   - 目安: 全角文字{jp_char_estimate}文字以内
+3. 行数は最大6行（空行含む）
+4. 前の投稿と異なる切り口にすること
+5. 投稿文のみ出力（前置き・説明・「投稿文:」などは一切不要）
 
-投稿文のみ出力してください。"""
+本文のみ出力してください。"""
 
     try:
         message = ai_client.messages.create(
             model="claude-3-5-haiku-20241022",
-            max_tokens=600,
+            max_tokens=400,
             messages=[{"role": "user", "content": prompt}]
         )
         return message.content[0].text.strip()
@@ -324,26 +317,56 @@ def generate_tweet(
         return None
 
 
-# ── クリーニング＆バリデーション ─────────────────────────────
-def clean_tweet(text: str) -> str:
+# ── クリーニング・トリム・バリデーション ─────────────────────
+def clean_body(text: str) -> str:
+    """AIが誤って入れたURL・ハッシュタグ・前置きを除去"""
+    # 前置き除去
     for p in [r'^(投稿文|ツイート|X投稿|以下|出力)[：:]\s*', r'^```[^\n]*\n', r'\n```$']:
         text = re.sub(p, '', text, flags=re.MULTILINE).strip()
     text = re.sub(r'^[「」『』]', '', text).strip()
+    # URLを除去（コード側で付加するため）
+    text = _URL_RE.sub('', text).strip()
+    # ハッシュタグ行を除去
+    lines = [l for l in text.split('\n') if not re.match(r'^#\S', l)]
+    text = '\n'.join(lines).strip()
+    # 末尾の空行を整理
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
     return text
 
 
-def validate_tweet(text: str) -> str | None:
-    if APP_URL not in text:
-        print("  ✗ App StoreリンクなしでNG")
+def trim_body(body: str, budget: int) -> str:
+    """本文がbudgetを超えていたら末尾の行から削る"""
+    if tw_len(body) <= budget:
+        return body
+    lines = body.split('\n')
+    while lines and tw_len('\n'.join(lines)) > budget:
+        # 末尾から非空行を1行削る
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip():
+                lines.pop(i)
+                break
+        else:
+            lines.pop()
+        # 末尾の連続空行を削る
+        while lines and not lines[-1].strip():
+            lines.pop()
+    return '\n'.join(lines).strip()
+
+
+def assemble_and_validate(body: str, footer: str) -> str | None:
+    """本文＋フッターを合わせてバリデーション"""
+    tweet = body + footer
+    if APP_URL not in tweet:
+        print("  ✗ URLなしでNG")
         return None
-    if "#つむまね" not in text:
+    if "#つむまね" not in tweet:
         print("  ✗ #つむまねなしでNG")
         return None
-    length = tw_len(text)
+    length = tw_len(tweet)
     if length > MAX_CHARS:
         print(f"  ✗ {length}文字でNG（280超過）")
         return None
-    return text
+    return tweet
 
 
 # ── メイン ────────────────────────────────────────────────
@@ -365,11 +388,14 @@ def main():
     hour, minute = now.hour, now.minute
     theme      = get_hour_theme(hour)
     style_info = get_post_style(minute)
+    footer     = build_footer(theme)
+    budget     = get_body_budget(footer)
 
     print(f"🤖 AI自動生成投稿 開始")
     print(f"  時刻: {now.strftime('%-H:%M')} / テーマ: {theme['label']} / スタイル: {style_info['label']}")
+    print(f"  本文ウェイト上限: {budget}（フッター={tw_len(footer)}、合計上限={MAX_CHARS}）")
 
-    # 1. トレンド収集（スタイルに応じて使い分け）
+    # 1. トレンド収集
     print("  ニュース収集中...")
     market_news    = gather_market_news()
     community_buzz = gather_community_buzz() if style_info["name"] == "personal" else []
@@ -379,18 +405,21 @@ def main():
         print("❌ ニュース取得失敗 - スキップします")
         return
 
-    # 2. AI生成（最大3回リトライ）
+    # 2. AI生成（最大3回）→ クリーニング → トリム → バリデーション
     tweet = None
     for attempt in range(1, 4):
         print(f"  AI生成 試行{attempt}/3...")
-        raw = generate_tweet(market_news, community_buzz, theme, now, style_info)
+        raw = generate_body(market_news, community_buzz, theme, now, style_info, budget)
         if not raw:
             continue
-        raw = clean_tweet(raw)
-        tweet = validate_tweet(raw)
+
+        body = clean_body(raw)
+        body = trim_body(body, budget)          # 超過していれば強制短縮
+        tweet = assemble_and_validate(body, footer)
+
         if tweet:
             break
-        print(f"    生成内容: {raw[:60]}...")
+        print(f"    本文({tw_len(body)}w): {body[:50]}...")
 
     if not tweet:
         print("❌ 3回試行失敗 - スキップします")
