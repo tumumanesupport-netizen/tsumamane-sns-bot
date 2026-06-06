@@ -14,10 +14,12 @@ on:
     - cron: '0 23 * * 5'
     # ⑥ 平日15:30 JST (UTC 06:30) - テーマ株
     - cron: '30 6 * * 1-5'
+    # ⑦ 毎朝9:00 JST (UTC 00:00) - AI自動生成
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / overseas / evening / ipo / weekly / theme / test / release)'
+        description: '投稿タイプ (morning / overseas / evening / ipo / weekly / theme / auto / test / release)'
         required: true
         default: 'morning'
 
@@ -35,7 +37,7 @@ jobs:
           python-version: '3.12'
 
       - name: 依存関係をインストール
-        run: pip install tweepy yfinance pandas pytz requests beautifulsoup4
+        run: pip install tweepy yfinance pandas pytz requests beautifulsoup4 anthropic
 
       # テスト投稿（静的ツイート）- 認証確認用
       - name: テスト投稿（認証確認）
@@ -116,6 +118,19 @@ jobs:
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
         run: cd scripts && python tweet_theme.py
+
+      # ⑦ 毎朝9:00 JST - AI自動生成投稿（トレンド分析 → Claude API生成）
+      - name: AI自動生成ツイート
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '0 0 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'auto')
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: cd scripts && python tweet_auto.py
 
       # ⑤ 土曜朝8時 JST - 週次まとめ（出来高急増＋ニュース＋IPO）
       - name: 週次まとめツイート
