@@ -1,7 +1,8 @@
 """
-朝8時投稿 - 前日の日本株 急騰・急落TOP5
+朝8時投稿 - 前日の日本株 急騰・急落 TOP3
 """
 import os
+import re
 import tweepy
 import yfinance as yf
 import pandas as pd
@@ -11,7 +12,6 @@ from stocks_data import NIKKEI225
 
 JST = pytz.timezone('Asia/Tokyo')
 
-# ── Twitter認証 ───────────────────────────────────────────────────
 client = tweepy.Client(
     consumer_key=os.environ["TWITTER_API_KEY"],
     consumer_secret=os.environ["TWITTER_API_SECRET"],
@@ -19,80 +19,103 @@ client = tweepy.Client(
     access_token_secret=os.environ["TWITTER_ACCESS_TOKEN_SECRET"],
 )
 
-PROMO = "\n📱複数の証券口座を自動集計！\n#つむまね #日本株 #投資"
-
+APP_URL = "https://apps.apple.com/jp/app/id6773302106"
 CIRCLED = "①②③④⑤"
+MAX_CHARS = 280
+_URL_RE = re.compile(r'https?://\S+')
+
+
+def tw_len(text: str) -> int:
+    """Twitter加重文字数（日本語・絵文字=2文字、URL=23文字として計算）"""
+    text = _URL_RE.sub('A' * 23, text)   # URLを23文字のダミーに置換
+    count = 0
+    for ch in text:
+        cp = ord(ch)
+        if any([
+            0x2E80 <= cp <= 0x303F,   # CJK記号・句読点
+            0x3040 <= cp <= 0x31BF,   # ひらがな・カタカナ
+            0x3200 <= cp <= 0x33FF,   # 囲み文字
+            0x3400 <= cp <= 0x4DBF,   # CJK拡張A
+            0x4E00 <= cp <= 0x9FFF,   # CJK統合漢字
+            0xF900 <= cp <= 0xFAFF,   # CJK互換漢字
+            0xFE30 <= cp <= 0xFE6F,   # CJK互換形
+            0xFF00 <= cp <= 0xFFEF,   # 全角・半角形
+        ]) or cp > 0xFFFF:            # 絵文字（BMP外）
+            count += 2
+        else:
+            count += 1
+    return count
+
 
 def get_movers():
-    """前日の急騰・急落銘柄を取得"""
+    """前日の急騰・急落銘柄 TOP3 を取得"""
     tickers = list(NIKKEI225.keys())
     try:
-        # 直近5営業日のデータを取得（週末・祝日対応）
         raw = yf.download(tickers, period="5d", interval="1d",
                           progress=False, auto_adjust=True)
         prices = raw["Close"]
-
-        # 直近2日の終値で騰落率を計算
         prices = prices.dropna(how="all").tail(2)
         if len(prices) < 2:
             return None, None
-
         prev, last = prices.iloc[-2], prices.iloc[-1]
         pct = ((last - prev) / prev * 100).dropna().sort_values(ascending=False)
-
-        top5 = pct.head(5)
-        bot5 = pct.tail(5)
-        return top5, bot5
+        return pct.head(3), pct.tail(3)
     except Exception as e:
         print(f"データ取得エラー: {e}")
         return None, None
 
 
-def format_tweet(top5, bot5):
+def build_tweet(top, bot, max_name: int = 99) -> str:
     today = datetime.now(JST).strftime('%-m/%-d')
-    lines = [f"📊 {today} 東証 前日急騰・急落\n"]
+    lines = [f"📊 {today} 東証 急騰・急落 TOP3"]
 
-    lines.append("🚀 急騰TOP5")
-    for i, (ticker, pct) in enumerate(top5.items()):
-        name = NIKKEI225.get(ticker, ticker.replace(".T", ""))
+    lines.append("🚀 急騰")
+    for i, (ticker, pct) in enumerate(top.items()):
+        name = NIKKEI225.get(ticker, ticker.replace(".T", ""))[:max_name]
         lines.append(f"{CIRCLED[i]}{name} +{pct:.1f}%")
 
-    lines.append("\n📉 急落TOP5")
-    for i, (ticker, pct) in enumerate(bot5.items()):
-        name = NIKKEI225.get(ticker, ticker.replace(".T", ""))
+    lines.append("📉 急落")
+    for i, (ticker, pct) in enumerate(bot.items()):
+        name = NIKKEI225.get(ticker, ticker.replace(".T", ""))[:max_name]
         lines.append(f"{CIRCLED[i]}{name} {pct:.1f}%")
 
-    lines.append(PROMO)
+    lines.append("")
+    lines.append("📱つむまね（無料）")
+    lines.append(APP_URL)
+    lines.append("#日本株 #投資 #つむまね")
     return "\n".join(lines)
+
+
+def format_tweet(top, bot) -> str:
+    """280文字に収まるまで銘柄名を段階的に短縮"""
+    for max_name in range(10, 2, -1):
+        tweet = build_tweet(top, bot, max_name)
+        if tw_len(tweet) <= MAX_CHARS:
+            return tweet
+    return build_tweet(top, bot, 3)  # 最終フォールバック
 
 
 def main():
     print("📊 急騰・急落データ取得中...")
-    top5, bot5 = get_movers()
+    top, bot = get_movers()
 
-    if top5 is None or bot5 is None:
+    if top is None or bot is None:
         print("❌ データ取得失敗 - スキップします")
         return
 
-    tweet = format_tweet(top5, bot5)
-    print(f"投稿内容({len(tweet)}文字):\n{tweet}\n")
+    tweet = format_tweet(top, bot)
+    print(f"投稿内容({tw_len(tweet)}文字):\n{tweet}\n")
 
     try:
         response = client.create_tweet(text=tweet)
         print(f"✅ 朝ツイート成功: ID={response.data['id']}")
     except tweepy.errors.Forbidden as e:
-        print(f"❌ 403 Forbidden エラー")
-        print(f"  メッセージ: {e}")
+        print(f"❌ 403 Forbidden: {e}")
         if hasattr(e, 'response') and e.response is not None:
-            print(f"  レスポンス本文: {e.response.text}")
-            print(f"  ステータスコード: {e.response.status_code}")
-        if hasattr(e, 'api_codes'):
-            print(f"  APIエラーコード: {e.api_codes}")
-        if hasattr(e, 'api_errors'):
-            print(f"  APIエラー詳細: {e.api_errors}")
+            print(f"  本文: {e.response.text}")
         raise
     except Exception as e:
-        print(f"❌ 投稿エラー: {type(e).__name__}: {e}")
+        print(f"❌ エラー: {type(e).__name__}: {e}")
         raise
 
 
