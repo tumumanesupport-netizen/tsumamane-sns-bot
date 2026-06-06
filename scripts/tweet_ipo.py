@@ -196,7 +196,7 @@ def build_tweet(ipos: list, news: list, max_name: int = 99) -> str:
     lines.append("")
     lines.append("📱つむまね（無料）")
     lines.append(APP_URL)
-    lines.append("#IPO #新規上場 #つむまね")
+    lines.append("#IPO #新規上場 #初値 #つむまね")
     return "\n".join(lines)
 
 

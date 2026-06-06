@@ -47,6 +47,23 @@ def tw_len(text: str) -> int:
     return count
 
 
+def get_nikkei_change() -> str:
+    """日経平均の前日比を取得してコメント文を返す"""
+    try:
+        raw = yf.download("^N225", period="5d", interval="1d",
+                          progress=False, auto_adjust=True)
+        prices = raw["Close"].dropna().tail(2)
+        if len(prices) < 2:
+            return ""
+        prev, last = float(prices.iloc[-2]), float(prices.iloc[-1])
+        pct = (last - prev) / prev * 100
+        emoji = "📈" if pct >= 0 else "📉"
+        sign = "+" if pct >= 0 else ""
+        return f"{emoji} 日経 {sign}{pct:.1f}%"
+    except Exception:
+        return ""
+
+
 def get_movers():
     """前日の急騰・急落銘柄 TOP3 を取得"""
     tickers = list(NIKKEI225.keys())
@@ -65,9 +82,11 @@ def get_movers():
         return None, None
 
 
-def build_tweet(top, bot, max_name: int = 99) -> str:
+def build_tweet(top, bot, nikkei: str = "", max_name: int = 99) -> str:
     today = datetime.now(JST).strftime('%-m/%-d')
     lines = [f"📊 {today} 東証 急騰・急落 TOP3"]
+    if nikkei:
+        lines.append(nikkei)
 
     lines.append("🚀 急騰")
     for i, (ticker, pct) in enumerate(top.items()):
@@ -82,17 +101,17 @@ def build_tweet(top, bot, max_name: int = 99) -> str:
     lines.append("")
     lines.append("📱つむまね（無料）")
     lines.append(APP_URL)
-    lines.append("#日本株 #投資 #つむまね")
+    lines.append("#急騰 #急落 #日本株 #つむまね")
     return "\n".join(lines)
 
 
-def format_tweet(top, bot) -> str:
+def format_tweet(top, bot, nikkei: str = "") -> str:
     """280文字に収まるまで銘柄名を段階的に短縮"""
     for max_name in range(10, 2, -1):
-        tweet = build_tweet(top, bot, max_name)
+        tweet = build_tweet(top, bot, nikkei, max_name)
         if tw_len(tweet) <= MAX_CHARS:
             return tweet
-    return build_tweet(top, bot, 3)  # 最終フォールバック
+    return build_tweet(top, bot, nikkei, 3)
 
 
 def main():
@@ -103,7 +122,9 @@ def main():
         print("❌ データ取得失敗 - スキップします")
         return
 
-    tweet = format_tweet(top, bot)
+    nikkei = get_nikkei_change()
+    print(f"  日経: {nikkei or '取得失敗'}")
+    tweet = format_tweet(top, bot, nikkei)
     print(f"投稿内容({tw_len(tweet)}文字):\n{tweet}\n")
 
     try:

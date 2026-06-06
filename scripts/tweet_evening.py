@@ -129,7 +129,7 @@ def build_tweet(top5: list, max_name: int = 99) -> str:
     lines.append("")
     lines.append("📱つむまね（無料）")
     lines.append(APP_URL)
-    lines.append("#日本株 #株式投資 #つむまね")
+    lines.append("#注目銘柄 #日本株 #つむまね")
     return "\n".join(lines)
 
 

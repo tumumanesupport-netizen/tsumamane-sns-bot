@@ -12,10 +12,12 @@ on:
     - cron: '0 22 * * 0'
     # ⑤ 土曜朝8時 JST (UTC 23:00 金曜) - 週次まとめ
     - cron: '0 23 * * 5'
+    # ⑥ 平日15:30 JST (UTC 06:30) - テーマ株
+    - cron: '30 6 * * 1-5'
   workflow_dispatch:
     inputs:
       type:
-        description: '投稿タイプ (morning / overseas / evening / ipo / weekly / test / release)'
+        description: '投稿タイプ (morning / overseas / evening / ipo / weekly / theme / test / release)'
         required: true
         default: 'morning'
 
@@ -102,6 +104,18 @@ jobs:
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
         run: cd scripts && python tweet_ipo.py
+
+      # ⑥ 平日15:30 JST - テーマ株（半導体/AI/防衛/インバウンド/高配当）
+      - name: テーマ株ツイート
+        if: >
+          (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 1-5') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.type == 'theme')
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: cd scripts && python tweet_theme.py
 
       # ⑤ 土曜朝8時 JST - 週次まとめ（出来高急増＋ニュース＋IPO）
       - name: 週次まとめツイート
