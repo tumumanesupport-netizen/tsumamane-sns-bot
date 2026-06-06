@@ -1,21 +1,14 @@
 """
 AI自動生成投稿 - 30分ごと（48本/日）
-時間帯ごとにテーマを変え、「公式配信」と「個人コメント」を交互に投稿
 
-時間帯別テーマ:
-  5〜 7時: 朝活・今日の展望
-  8〜11時: 市場オープン・急騰急落
- 12〜14時: 前場振り返り・後場注目
- 15〜17時: 引け後分析・本日まとめ
- 18〜23時: 長期投資・NISA・iDeCo教育
-  0〜 4時: 米国株・翌日展望
+スタイル交互:
+  :00 → 公式配信スタイル
+        今日の金融トレンドニュースをデータ・断言系で発信
+  :30 → 個人コメントスタイル
+        投資コミュニティで話題の体験談・声をインフルエンサー口調で発信
 
-投稿スタイル（分で交互）:
-  :00 → 公式配信スタイル（データ・断言系）
-  :30 → 個人コメントスタイル（体験・共感系）
-
-つむまね機能アピール（ローテーション）:
-  複数証券口座の管理 / 資産管理 / 資産シミュレーション など
+つむまね機能:
+  8種の機能から投稿内容に最も自然に合うものをClaudeが選んで挿入
 
 PHASE 2（X Basic plan取得後）:
   get_viral_x_posts() のコメントアウトを外してバズ投稿分析を有効化
@@ -46,7 +39,6 @@ HEADERS = {
 
 # ── 時間帯別テーマ設定 ───────────────────────────────────────
 HOUR_THEMES = [
-    # (開始時, 終了時, ラベル, フォーカス, 推奨フォーマット)
     (5,  8,  "朝活タイム",
      "今日の市場展望・前日の米国株動向・朝イチで確認すべきこと",
      "「今日の注目ポイント」「朝に確認すべき3つのこと」など朝活投資家向け"),
@@ -69,60 +61,40 @@ HOUR_THEMES = [
 
 
 def get_hour_theme(hour: int) -> dict:
-    """現在時刻に対応するテーマを返す"""
     for start, end, label, focus, fmt in HOUR_THEMES:
         if start <= hour < end:
             return {"label": label, "focus": focus, "format": fmt}
     return {"label": "投資情報", "focus": "株式投資・NISA・資産運用", "format": "自由形式"}
 
 
-# ── 投稿スタイル設定（:00=公式 / :30=個人コメント 交互） ─────────
+# ── 投稿スタイル（:00=公式 / :30=個人コメント） ────────────────
 POST_STYLES = {
     "official": {
+        "name": "official",
         "label": "公式配信スタイル",
-        "instruction": (
-            "権威ある情報発信者として書く。\n"
-            "・「〜が重要です」「〜を確認しましょう」「〜のポイントをまとめました」など断言・まとめ系\n"
-            "・数字・データ・事実を中心に構成し、信頼感を出す\n"
-            "・絵文字は📊📈📉💹🔔など情報系を使う\n"
-            "・テンポよく箇条書きや番号リストを活用する"
-        ),
     },
     "personal": {
+        "name": "personal",
         "label": "個人コメントスタイル",
-        "instruction": (
-            "一般の個人投資家が気軽に呟くような口調で書く。\n"
-            "・「〜してみた」「〜だよね」「〜って知ってた？」「正直〜」など体験・共感系\n"
-            "・失敗談・気づき・驚きを含めると親近感が増す\n"
-            "・絵文字は😅🤔💡🙌😮✨など感情系を使う\n"
-            "・アプリは「使ってみたら便利だった」的な自然な口コミ推薦にする"
-        ),
     },
 }
 
 
 def get_post_style(minute: int) -> dict:
-    """分が0なら公式、30なら個人コメントスタイルを返す"""
     return POST_STYLES["personal"] if minute >= 30 else POST_STYLES["official"]
 
 
-# ── つむまねの機能アピール（ローテーション） ─────────────────────
+# ── つむまねの機能リスト（Claudeが最適なものを1つ選ぶ） ──────────
 APP_FEATURES = [
-    "複数の証券口座（SBI・楽天・マネックス・松井など）をまとめて管理できるのが「つむまね」",
-    "全口座の資産を一画面で把握できる資産管理アプリが「つむまね」",
-    "老後の資産を将来シミュレーションできるのが「つむまね」",
-    "NISA・iDeCo口座の残高もひとまとめに確認できるのが「つむまね」",
-    "配当金・分配金の受取履歴を口座横断で自動管理できるのが「つむまね」",
-    "保有株のポートフォリオをグラフで可視化できるのが「つむまね」",
-    "各口座の損益をリアルタイムで比較・確認できるのが「つむまね」",
-    "投資初心者でも直感的に使いやすい資産管理アプリが「つむまね」",
+    "複数の証券口座（SBI・楽天・マネックス・松井など）をまとめて一括管理できる",
+    "全口座の資産残高を一画面でリアルタイム把握できる",
+    "老後の資産を将来シミュレーションで確認できる",
+    "NISA・iDeCo口座の残高もひとまとめに確認できる",
+    "配当金・分配金の受取履歴を口座横断で自動管理できる",
+    "保有株のポートフォリオをグラフで可視化できる",
+    "各口座の損益をリアルタイムで横断比較できる",
+    "投資初心者でも直感的に使えるシンプルなUIで資産管理できる",
 ]
-
-
-def get_app_feature(hour: int, minute: int) -> str:
-    """時刻から今回アピールするつむまね機能を選ぶ（ローテーション）"""
-    index = (hour * 2 + (1 if minute >= 30 else 0)) % len(APP_FEATURES)
-    return APP_FEATURES[index]
 
 
 # ── Twitter文字数カウント ────────────────────────────────────
@@ -148,45 +120,81 @@ def tw_len(text: str) -> int:
     return count
 
 
-# ── Google News でトレンド収集 ────────────────────────────────
-def gather_trend_headlines() -> list:
-    """複数クエリのGoogle News RSSから今日のトレンドを収集"""
+# ── RSS取得ユーティリティ ─────────────────────────────────────
+def _fetch_rss_titles(url: str, limit: int = 3) -> list[str]:
+    """RSSフィードからタイトルを取得（失敗時は空リスト）"""
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+        titles = []
+        for item in root.findall('.//item')[:limit]:
+            t = item.find('title')
+            if t is not None and t.text:
+                title = t.text.split(' - ')[0].strip()
+                title = re.sub(r'【.*?】|「.*?」', '', title).strip()
+                if title and len(title) > 5:
+                    titles.append(title)
+        return titles
+    except Exception:
+        return []
+
+
+def _google_news_url(query: str) -> str:
+    return (
+        "https://news.google.com/rss/search"
+        f"?q={query.replace(' ', '+')}&hl=ja&gl=JP&ceid=JP:ja"
+    )
+
+
+# ── ① 公式配信用: 金融トレンドニュース ─────────────────────────
+def gather_market_news() -> list[str]:
+    """金融・経済の最新ニュースを幅広く収集（公式スタイル向け）"""
     queries = [
-        "NISA 積立 おすすめ 2026",
-        "日本株 急騰 注目銘柄",
+        "日経平均 株価 今日",
+        "日本株 急騰 急落 注目銘柄",
+        "NISA 新制度 2026",
         "iDeCo 節税 老後資金",
-        "高配当株 配当利回り",
-        "資産運用 初心者 始め方",
-        "米国株 投資 注目",
-        "新NISA 成長投資枠",
-        "テーマ株 半導体 AI",
+        "高配当株 配当利回り 人気",
+        "米国株 ナスダック S&P500",
+        "テーマ株 半導体 AI 防衛",
+        "為替 ドル円 円安 円高",
+        "日本銀行 金利 利上げ",
+        "IPO 新規上場 注目",
     ]
     headlines = []
     seen = set()
-
     for q in queries:
-        url = (
-            "https://news.google.com/rss/search"
-            f"?q={q.replace(' ', '+')}&hl=ja&gl=JP&ceid=JP:ja"
-        )
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            resp.raise_for_status()
-            root = ET.fromstring(resp.content)
-        except Exception:
-            continue
-
-        for item in root.findall('.//item')[:2]:
-            title_elem = item.find('title')
-            if title_elem is None or not title_elem.text:
-                continue
-            title = title_elem.text.split(' - ')[0].strip()
-            title = re.sub(r'【.*?】', '', title).strip()
-            if title and title not in seen and len(title) > 5:
+        for title in _fetch_rss_titles(_google_news_url(q), limit=2):
+            if title not in seen:
                 seen.add(title)
                 headlines.append(title)
+    return headlines[:15]
 
-    return headlines[:12]
+
+# ── ② 個人コメント用: 投資コミュニティの声・体験談 ──────────────
+def gather_community_buzz() -> list[str]:
+    """投資家コミュニティで話題の体験談・口コミ系ニュースを収集（個人スタイル向け）"""
+    queries = [
+        "NISA 始めた 体験 口コミ 実際",
+        "個人投資家 資産 増えた 実感",
+        "積立投資 継続 効果 実績",
+        "高配当株 配当金 生活 サラリーマン",
+        "iDeCo デメリット 知らなかった",
+        "新NISA やってみた 正直",
+        "株式投資 失敗 学んだ",
+        "資産運用 初心者 変わった 生活",
+        "FIRE 目指す 投資 方法",
+        "インデックス投資 積立 長期",
+    ]
+    buzz = []
+    seen = set()
+    for q in queries:
+        for title in _fetch_rss_titles(_google_news_url(q), limit=2):
+            if title not in seen:
+                seen.add(title)
+                buzz.append(title)
+    return buzz[:15]
 
 
 # ── PHASE 2: X上のバズ投稿を分析（Basicプラン取得後に有効化）──
@@ -219,48 +227,88 @@ def gather_trend_headlines() -> list:
 
 # ── Claude API で投稿文を生成 ─────────────────────────────────
 def generate_tweet(
-    headlines: list,
+    market_news: list[str],
+    community_buzz: list[str],
     theme: dict,
     now: datetime,
     style_info: dict,
-    feature: str,
 ) -> str | None:
-    """Claude APIでトレンド×時間帯テーマ×スタイルに基づいた投稿を生成"""
+    """スタイルに応じてニュースソースとプロンプトを切り替えて投稿文を生成"""
+
     date_str = now.strftime('%-m月%-d日')
     time_str = now.strftime('%-H時%-M分')
-    headlines_text = "\n".join(f"・{h}" for h in headlines)
+    features_text = "\n".join(f"  ・{f}" for f in APP_FEATURES)
 
-    prompt = f"""あなたは日本の株式投資アプリ「つむまね」のSNSマネージャーです。
-今は{date_str} {time_str}です。
+    is_personal = style_info["name"] == "personal"
 
-━━ 今の時間帯: {theme['label']} ━━
-この時間帯のフォーカス: {theme['focus']}
-推奨フォーマット: {theme['format']}
+    if is_personal:
+        # ── 個人コメントスタイル ──────────────────────────────
+        buzz_text = "\n".join(f"・{b}" for b in community_buzz)
+        news_sub  = "\n".join(f"・{n}" for n in market_news[:5])
 
-━━ 今回の投稿スタイル: {style_info['label']} ━━
-{style_info['instruction']}
+        prompt = f"""あなたはフォロワー数5万人以上の人気個人投資家インフルエンサーです。
+今は{date_str} {time_str}。テーマ時間帯: {theme['label']}
 
-━━ 今回アピールするつむまねの機能（必ず1文入れること） ━━
-{feature}
-→ 投稿の流れに合わせて自然に1文だけ入れる（ゴリ押しにならないように）
+━━ 今、投資コミュニティで話題になっていること ━━
+（これらは投資家たちが実際に語っているリアルな体験・関心事のトレンドです）
+{buzz_text}
 
-━━ 今日のトレンドニュース ━━
-{headlines_text}
+━━ 今日の市場の動き（参考） ━━
+{news_sub}
+
+━━ あなたの投稿スタイル ━━
+・フォロワーへの「語りかけ」や「共感呼びかけ」が上手い
+・「正直〜」「これ知らなかった😅」「みんなも気になってるはず」「〜してみた結果」など
+  体験談・気づき・驚きを混ぜる
+・数字や体験に基づくリアルさが信頼感を生む
+・絵文字は😅🤔💡🙌✨😮を感情に合わせて自然に使う
+・上から目線にならず、同じ投資家目線で話す
+・「最近こんな声をよく聞くんだけど〜」「投資仲間と話してたら〜」みたいな語り口もOK
+
+━━ つむまねの機能を1文だけ自然に入れること ━━
+以下の中から投稿内容に最も自然に合う機能を1つだけ選んで、
+「つむまね」というアプリ名と一緒に口コミ感覚で紹介する:
+{features_text}
 
 ━━ 絶対に守るルール ━━
-1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算し、合計【280以内】
+1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算、合計【280以内】
 2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
 3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
-4. 投稿文のみ出力（説明・前置き・「投稿文:」などは一切不要）
-5. 前の投稿と異なる角度・切り口にすること
+4. 投稿文のみ出力（前置き・説明・「投稿文:」などは一切不要）
+5. 前の投稿と異なる切り口にすること
 
-━━ 高インプレッションを出すコツ ━━
-・数値・パーセンテージを入れる（年利3.5%・月1万円・○%増など）
-・「知らないと損」「実は○○だった」「○○してみた」は反応が良い
-・疑問形で始めると返信・引用が増える
-・絵文字は冒頭と重要ポイントに適度に（多すぎ注意）
-・ランキング形式（①②③）は保存率が高い
-・アプリ紹介は自然な流れで、押しつけがましくなく
+投稿文のみ出力してください。"""
+
+    else:
+        # ── 公式配信スタイル ──────────────────────────────────
+        news_text = "\n".join(f"・{n}" for n in market_news)
+
+        prompt = f"""あなたは権威ある投資情報メディアの編集長です。
+今は{date_str} {time_str}。テーマ時間帯: {theme['label']}（{theme['focus']}）
+
+━━ 今日のリアルタイム金融トレンド（これをベースに投稿を作成） ━━
+{news_text}
+
+━━ 公式配信スタイルの要件 ━━
+・上記のトレンドの中から最も今日インパクトのある話題を選んで発信
+・「〜が重要です」「〜を押さえておきましょう」「〜のポイントをまとめました」など
+  断言・まとめ系の権威ある語り口
+・数字・パーセンテージ・具体的事実を積極的に使う（例: 年利3.5%・+○%・○億円）
+・絵文字は📊📈📉💹🔔📰💰など情報・金融系を使う
+・ランキング（①②③）や箇条書きは保存率・シェア率が高い
+・今日のニュースに直接触れた「時事性」が命
+
+━━ つむまねの機能を1文だけ自然に入れること ━━
+以下の中から投稿内容に最も自然に合う機能を1つだけ選んで、
+「つむまね」というアプリ名と一緒に権威ある紹介文として添える:
+{features_text}
+
+━━ 絶対に守るルール ━━
+1. 文字数: 日本語1文字=2・英数字=1・URLは必ず23文字として計算、合計【280以内】
+2. 末尾に必ずこのURLをそのままコピー: {APP_URL}
+3. ハッシュタグ3〜4個、必ず「#つむまね」を含める
+4. 投稿文のみ出力（前置き・説明・「投稿文:」などは一切不要）
+5. 前の投稿と異なる切り口にすること
 
 投稿文のみ出力してください。"""
 
@@ -278,7 +326,6 @@ def generate_tweet(
 
 # ── クリーニング＆バリデーション ─────────────────────────────
 def clean_tweet(text: str) -> str:
-    """AI出力から余計な説明文を除去"""
     for p in [r'^(投稿文|ツイート|X投稿|以下|出力)[：:]\s*', r'^```[^\n]*\n', r'\n```$']:
         text = re.sub(p, '', text, flags=re.MULTILINE).strip()
     text = re.sub(r'^[「」『』]', '', text).strip()
@@ -286,7 +333,6 @@ def clean_tweet(text: str) -> str:
 
 
 def validate_tweet(text: str) -> str | None:
-    """URLと#つむまねの存在確認、文字数チェック"""
     if APP_URL not in text:
         print("  ✗ App StoreリンクなしでNG")
         return None
@@ -302,7 +348,6 @@ def validate_tweet(text: str) -> str | None:
 
 # ── メイン ────────────────────────────────────────────────
 def main():
-    # APIキー未設定の場合はエラーメールを送らず静かに終了
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("⚠️ ANTHROPIC_API_KEY 未設定 - スキップします（エラーではありません）")
         sys.exit(0)
@@ -317,23 +362,20 @@ def main():
     )
 
     now = datetime.now(JST)
-    hour = now.hour
-    minute = now.minute
-
-    theme = get_hour_theme(hour)
+    hour, minute = now.hour, now.minute
+    theme      = get_hour_theme(hour)
     style_info = get_post_style(minute)
-    feature = get_app_feature(hour, minute)
 
     print(f"🤖 AI自動生成投稿 開始")
-    print(f"  時刻: {now.strftime('%-H:%M')} / テーマ: {theme['label']}")
-    print(f"  スタイル: {style_info['label']}")
-    print(f"  機能アピール: {feature}")
+    print(f"  時刻: {now.strftime('%-H:%M')} / テーマ: {theme['label']} / スタイル: {style_info['label']}")
 
-    # 1. トレンド収集
-    headlines = gather_trend_headlines()
-    print(f"  トレンドニュース: {len(headlines)}件")
+    # 1. トレンド収集（スタイルに応じて使い分け）
+    print("  ニュース収集中...")
+    market_news    = gather_market_news()
+    community_buzz = gather_community_buzz() if style_info["name"] == "personal" else []
+    print(f"  市場ニュース: {len(market_news)}件 / コミュニティBuzz: {len(community_buzz)}件")
 
-    if not headlines:
+    if not market_news:
         print("❌ ニュース取得失敗 - スキップします")
         return
 
@@ -341,7 +383,7 @@ def main():
     tweet = None
     for attempt in range(1, 4):
         print(f"  AI生成 試行{attempt}/3...")
-        raw = generate_tweet(headlines, theme, now, style_info, feature)
+        raw = generate_tweet(market_news, community_buzz, theme, now, style_info)
         if not raw:
             continue
         raw = clean_tweet(raw)
