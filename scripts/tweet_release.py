@@ -28,6 +28,14 @@ https://apps.apple.com/jp/app/id6773302106
 #つむまね #資産管理 #投資 #NISA #配当投資 #新着アプリ"""
 
 def main():
+    # まず認証テスト（読み取り）
+    try:
+        me = client.get_me()
+        print(f"✅ 認証OK: @{me.data.username} (ID: {me.data.id})")
+    except Exception as e:
+        print(f"❌ 認証テスト失敗: {e}")
+        raise
+
     print(f"投稿内容({len(TWEET)}文字):\n{TWEET}\n")
     try:
         response = client.create_tweet(text=TWEET)
