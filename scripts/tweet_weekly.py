@@ -2,15 +2,13 @@
 週次まとめ投稿（土曜朝8時 JST）
 - 週間出来高急増銘柄 TOP3（yfinance）
 - 注目市場ニュース TOP2（Google News RSS）
-- 直近IPO予定（ipojp.com）
 """
 import os
 import re
 import tweepy
 import yfinance as yf
 import requests
-from bs4 import BeautifulSoup
-from datetime import datetime, date
+from datetime import datetime
 import pytz
 import xml.etree.ElementTree as ET
 from stocks_data import NIKKEI225
@@ -138,7 +136,7 @@ def get_market_news(limit: int = 2) -> list:
             # 媒体名を除去
             title = title_elem.text.split(' - ')[0].strip()
             title = re.sub(r'[【】\[\]].*?[【】\[\]]', '', title).strip()
-            title = title[:32] + '…' if len(title) > 32 else title
+            title = title[:20] + '…' if len(title) > 20 else title
             if title and title not in seen:
                 seen.add(title)
                 news.append(title)
@@ -150,66 +148,10 @@ def get_market_news(limit: int = 2) -> list:
     return news[:limit]
 
 
-# ── IPO予定取得（ipojp.com） ──────────────────────────────────
-def get_upcoming_ipos(limit: int = 2) -> list:
-    """今後上場予定のIPO銘柄を返す"""
-    url = "https://ipojp.com/schedule/"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"⚠️ IPO取得エラー: {e}")
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    today = date.today()
-    ipos, seen = [], set()
-    date_pat = re.compile(r'(\d{4})/(\d{2})/(\d{2})')
-
-    for node in soup.find_all(string=date_pat):
-        m = date_pat.search(str(node))
-        if not m:
-            continue
-        try:
-            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:
-            continue
-        if d < today:
-            continue
-
-        parent = getattr(node, 'parent', None)
-        name, market = "", ""
-        for _ in range(8):
-            if parent is None:
-                break
-            for a in parent.find_all('a', href=re.compile(r'/schedule/\d+')):
-                candidate = a.get_text(strip=True)
-                if candidate and len(candidate) <= 20:
-                    name = candidate
-                    break
-            txt = parent.get_text()
-            for kw in ["グロース", "スタンダード", "プライム"]:
-                if kw in txt:
-                    market = kw[:3]   # 短縮: グロ / スタ / プラ
-                    break
-            if name:
-                break
-            parent = getattr(parent, 'parent', None)
-
-        if not name or (name, d) in seen:
-            continue
-        seen.add((name, d))
-        ipos.append({"name": name, "date": d, "market": market})
-
-    ipos.sort(key=lambda x: x["date"])
-    return ipos[:limit]
-
-
 # ── ツイート生成 ─────────────────────────────────────────────
 def build_tweet(
     leaders: list,
     news:    list,
-    ipos:    list,
     max_name: int = 99,
 ) -> str:
     today_str = datetime.now(JST).strftime('%-m/%-d')
@@ -231,15 +173,6 @@ def build_tweet(
         for n in news:
             lines.append(n)
 
-    # IPO予定
-    if ipos:
-        lines.append("")
-        ipo_str = "　".join(
-            f"{ip['name'][:5]}({ip['date'].month}/{ip['date'].day})"
-            for ip in ipos
-        )
-        lines.append(f"🗓 IPO: {ipo_str}")
-
     lines.append("")
     lines.append("📱つむまね（無料）")
     lines.append(APP_URL)
@@ -247,13 +180,13 @@ def build_tweet(
     return "\n".join(lines)
 
 
-def format_tweet(leaders, news, ipos) -> str:
+def format_tweet(leaders, news) -> str:
     """280文字に収まるまで段階的に短縮"""
     for max_name in range(10, 2, -1):
-        tweet = build_tweet(leaders, news, ipos, max_name)
+        tweet = build_tweet(leaders, news, max_name)
         if tw_len(tweet) <= MAX_CHARS:
             return tweet
-    return build_tweet(leaders, news, ipos, 3)
+    return build_tweet(leaders, news, 3)
 
 
 # ── メイン ────────────────────────────────────────────────
@@ -270,16 +203,11 @@ def main():
     for n in news:
         print(f"    - {n}")
 
-    ipos = get_upcoming_ipos()
-    print(f"  IPO予定: {len(ipos)}件")
-    for ip in ipos:
-        print(f"    - {ip['name']} {ip['date']} [{ip['market']}]")
-
-    if not leaders and not news and not ipos:
+    if not leaders and not news:
         print("❌ データなし - スキップします")
         return
 
-    tweet = format_tweet(leaders, news, ipos)
+    tweet = format_tweet(leaders, news)
     print(f"\n投稿内容({tw_len(tweet)}文字):\n{tweet}\n")
 
     try:

@@ -107,11 +107,11 @@ def get_ipo_schedule(limit: int = 3) -> list:
                         name = candidate
                         break
 
-            # 市場区分
+            # 市場区分（省略形で文字数節約）
             if not market:
-                for kw in ["グロース", "スタンダード", "プライム"]:
+                for kw, abbr in [("グロース", "グロ"), ("スタンダード", "スタ"), ("プライム", "プラ")]:
                     if kw in full_text:
-                        market = kw
+                        market = abbr
                         break
 
             # 公開価格
@@ -163,8 +163,8 @@ def get_ipo_news(limit: int = 1) -> list:
         title = title_elem.text.split(' - ')[0].strip()
         # 不要なワードを除去してコンパクトに
         title = re.sub(r'【.*?】', '', title).strip()
-        if len(title) > 36:
-            title = title[:35] + '…'
+        if len(title) > 24:
+            title = title[:23] + '…'
         if title:
             news.append(title)
         if len(news) >= limit:
