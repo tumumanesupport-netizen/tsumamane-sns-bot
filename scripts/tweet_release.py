@@ -33,7 +33,15 @@ def main():
         response = client.create_tweet(text=TWEET)
         print(f"✅ リリース告知ツイート成功: ID={response.data['id']}")
     except Exception as e:
-        print(f"❌ エラー: {e}")
+        print(f"❌ エラー種別: {type(e).__name__}")
+        print(f"❌ エラー内容: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"  HTTPステータス: {e.response.status_code}")
+            print(f"  レスポンス本文: {e.response.text}")
+        if hasattr(e, 'api_codes'):
+            print(f"  APIエラーコード: {e.api_codes}")
+        if hasattr(e, 'api_errors'):
+            print(f"  APIエラー詳細: {e.api_errors}")
         raise
 
 if __name__ == "__main__":
