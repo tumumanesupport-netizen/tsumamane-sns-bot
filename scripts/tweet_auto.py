@@ -1,11 +1,14 @@
 """
-AI自動生成投稿 - 30分ごと（48本/日）
+AI自動生成投稿 - 毎時15分（24本/日）
 
-3スタイルローテーション:
-  (hour*2 + (1 if minute>=30 else 0)) % 3
+6スタイルローテーション:
+  hour % 6
   0 → 公式配信スタイル（今日のトレンド × データ断言系）
-  1 → 個人コメントスタイル（体験・共感 × インフルエンサー過激口調）
+  1 → 個人コメント(日本株)
   2 → 論争スタイル（投資界あるある議論に賛否で参加・炎上ぎりぎり）
+  3 → 公式配信スタイル
+  4 → 個人コメント(世界株)
+  5 → 論争スタイル
 
 文字数管理:
   URLとハッシュタグはコード側で付加。Claudeには本文のみ生成させる。
@@ -48,16 +51,6 @@ HOUR_THEMES = [
     (0,  5,  "深夜米国市場",   "米国株・ドル円・ナスダック・S&P500・翌日影響", "海外市場連動形式"),
 ]
 
-# ── テーマ別ハッシュタグ（コード側で付加） ──────────────────────
-THEME_HASHTAGS = {
-    "朝活タイム":     "#朝活投資 #日本株 #市場展望 #つむまね",
-    "市場オープン":   "#日本株 #急騰急落 #注目銘柄 #つむまね",
-    "お昼の相場":     "#前場 #後場 #日本株 #つむまね",
-    "引け後分析":     "#日本株 #相場分析 #投資 #つむまね",
-    "夜の学習タイム": "#NISA #iDeCo #資産運用 #つむまね",
-    "深夜米国市場":   "#米国株 #ドル円 #海外投資 #つむまね",
-    "投資情報":       "#投資 #資産運用 #NISA #つむまね",
-}
 
 # ── つむまねの機能リスト ──────────────────────────────────────
 APP_FEATURES = [
@@ -100,7 +93,7 @@ def get_hour_theme(hour: int) -> dict:
 
 def get_post_style(hour: int, minute: int) -> dict:
     """6スタイルローテーション: 公式 → 個人(日本株) → 論争 → 公式 → 個人(世界株) → 論争"""
-    index = (hour * 2 + (1 if minute >= 30 else 0)) % 6
+    index = hour % 6
     return [
         {"name": "official",        "label": "公式配信スタイル"},
         {"name": "personal_japan",  "label": "個人コメント(日本株)"},
@@ -111,10 +104,9 @@ def get_post_style(hour: int, minute: int) -> dict:
     ][index]
 
 
-# ── フッター（URL＋ハッシュタグ）の構築と文字数計算 ─────────────
+# ── フッター（URL のみ）の構築と文字数計算 ──────────────────────
 def build_footer(theme: dict) -> str:
-    hashtags = THEME_HASHTAGS.get(theme["label"], THEME_HASHTAGS["投資情報"])
-    return "\n" + APP_URL + "\n" + hashtags
+    return "\n" + APP_URL
 
 
 def get_body_budget(footer: str) -> int:
@@ -289,7 +281,6 @@ def _make_prompt_official(market_news, theme, date_str, features_text, body_budg
         "・具体的な数字で現実の厳しさを突きつける（金額・年数・利率）\n"
         "・「知っている人 vs 知らない人」の格差を強調\n"
         "・断言・言い切り（弱腰表現「〜かもしれません」は絶対NG）\n"
-        "・絵文字は📊💥🔥⚠️💸😱を必ず1個以上使う\n"
         "・ランキング（①②③）や「○○選」で保存率を上げる\n\n"
         "【絶対NG】\n"
         "・「〜かもしれません」「参考にしてください」などの丁寧すぎる表現\n"
@@ -299,9 +290,9 @@ def _make_prompt_official(market_news, theme, date_str, features_text, body_budg
         "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に紹介（URLは不要）:\n"
         + features_text + "\n\n"
         "━━ 生成ルール（厳守） ━━\n"
-        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも絵文字も含めない）\n"
         "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
-        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "   日本語1文字=2、英数字=1 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
         "3. 行数は最大6行（空行含む）\n"
         "4. 前の投稿と異なる切り口にすること\n"
         "5. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
@@ -336,8 +327,7 @@ def _make_prompt_personal_japan(buzz, market_news, theme, date_str, features_tex
         "・日経平均・東証・国内銘柄に触れる\n"
         "・危機感・緊急性（「今すぐ」「手遅れになる前に」）\n"
         "・具体的な数字で現実を突きつける\n"
-        "・断言・言い切り（「〜だ」「〜しろ」口調）\n"
-        "・絵文字は😤🔥💥😱🤯💸を必ず1個以上使う\n\n"
+        "・断言・言い切り（「〜だ」「〜しろ」口調）\n\n"
         "【絶対NG】\n"
         "・「〜かもしれません」「〜と思います」などの弱腰表現\n"
         "・米国株・海外株の話（今回は日本株のみ）\n"
@@ -346,9 +336,9 @@ def _make_prompt_personal_japan(buzz, market_news, theme, date_str, features_tex
         "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に口コミ感覚で紹介（URLは不要）:\n"
         + features_text + "\n\n"
         "━━ 生成ルール（厳守） ━━\n"
-        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも絵文字も含めない）\n"
         "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
-        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "   日本語1文字=2、英数字=1 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
         "3. 行数は最大6行（空行含む）\n"
         "4. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
         "本文のみ出力してください。"
@@ -382,8 +372,7 @@ def _make_prompt_personal_global(buzz, market_news, theme, date_str, features_te
         "・S&P500・ナスダック・全世界株など海外市場に触れる\n"
         "・為替（ドル円）の影響や海外投資のメリットに言及\n"
         "・具体的な数字で現実を突きつける\n"
-        "・断言・言い切り（「〜だ」「〜しろ」口調）\n"
-        "・絵文字は😤🔥💥🌍📈を必ず1個以上使う\n\n"
+        "・断言・言い切り（「〜だ」「〜しろ」口調）\n\n"
         "【絶対NG】\n"
         "・「〜かもしれません」「〜と思います」などの弱腰表現\n"
         "・日本株・国内株の話（今回は海外株のみ）\n"
@@ -392,9 +381,9 @@ def _make_prompt_personal_global(buzz, market_news, theme, date_str, features_te
         "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に口コミ感覚で紹介（URLは不要）:\n"
         + features_text + "\n\n"
         "━━ 生成ルール（厳守） ━━\n"
-        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも絵文字も含めない）\n"
         "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
-        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "   日本語1文字=2、英数字=1 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
         "3. 行数は最大6行（空行含む）\n"
         "4. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
         "本文のみ出力してください。"
@@ -428,8 +417,7 @@ def _make_prompt_personal(community_buzz, market_news, theme, date_str, features
         "【必ず入れること】\n"
         "・危機感・緊急性（「今すぐ」「手遅れになる前に」「〜な現実」）\n"
         "・具体的な数字で現実を突きつける\n"
-        "・断言・言い切り（「〜だ」「〜しろ」口調）\n"
-        "・絵文字は😤🔥💥😱🤯💸を必ず1個以上使う\n\n"
+        "・断言・言い切り（「〜だ」「〜しろ」口調）\n\n"
         "【絶対NG】\n"
         "・「〜かもしれません」「〜と思います」などの弱腰表現\n"
         "・おとなしくまとめるだけの無難な投稿\n"
@@ -438,9 +426,9 @@ def _make_prompt_personal(community_buzz, market_news, theme, date_str, features
         "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に口コミ感覚で紹介（URLは不要）:\n"
         + features_text + "\n\n"
         "━━ 生成ルール（厳守） ━━\n"
-        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも絵文字も含めない）\n"
         "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
-        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "   日本語1文字=2、英数字=1 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
         "3. 行数は最大6行（空行含む）\n"
         "4. 前の投稿と異なる切り口にすること\n"
         "5. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
@@ -449,7 +437,7 @@ def _make_prompt_personal(community_buzz, market_news, theme, date_str, features
 
 
 def _make_prompt_debate(market_news, now, features_text, body_budget):
-    topic_index = (now.hour * 2 + (1 if now.minute >= 30 else 0)) % len(CONTROVERSIAL_TOPICS)
+    topic_index = now.hour % len(CONTROVERSIAL_TOPICS)
     topic = CONTROVERSIAL_TOPICS[topic_index]
     news_sub = "\n".join("・" + n for n in market_news[:5])
     date_str = now.strftime("%-m月%-d日")
@@ -467,8 +455,7 @@ def _make_prompt_debate(market_news, now, features_text, body_budget):
         "・相手の主張の弱点を突くか、自分の体験で反論 or 支持する\n"
         "・「どっちが正しいかは人それぞれ」で絶対に終わらない\n"
         "・「それは○○の場合だけだ」「○○を無視してる」などの具体的な反論を入れる\n"
-        "・最後は読者が「賛成」「反対」「俺は違う」と反応したくなる締めで終わる\n"
-        "・絵文字は🔥💥🤔😤を使う\n\n"
+        "・最後は読者が「賛成」「反対」「俺は違う」と反応したくなる締めで終わる\n\n"
         "【冒頭パターン例（このどれかで始める）】\n"
         "・「○○って言う人よく見るけどさ、正直言わせてもらう」\n"
         "・「○○論、俺はずっと疑問に思ってた」\n"
@@ -482,9 +469,9 @@ def _make_prompt_debate(market_news, now, features_text, body_budget):
         "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に紹介（URLは不要）:\n"
         + features_text + "\n\n"
         "━━ 生成ルール（厳守） ━━\n"
-        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも絵文字も含めない）\n"
         "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
-        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "   日本語1文字=2、英数字=1 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
         "3. 行数は最大6行（空行含む）\n"
         "4. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
         "本文のみ出力してください。"
@@ -528,7 +515,16 @@ def clean_body(text: str) -> str:
     text = _URL_RE.sub("", text).strip()
     lines = [l for l in text.split("\n") if not re.match(r"^#\S", l)]
     text = "\n".join(lines).strip()
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    # 絵文字を除去
+    text = re.sub(
+        r"[\U0001F300-\U0001FAFF\U00002600-\U000027FF\U00002300-\U000023FF"
+        r"\U0001F000-\U0001F02F\U0001F0A0-\U0001F0FF\U0001F900-\U0001F9FF"
+        r"\U0000200D\U0000FE0F\U00002702-\U000027B0]+",
+        "",
+        text,
+    ).strip()
+    return text
 
 
 def trim_body(body: str, budget: int) -> str:

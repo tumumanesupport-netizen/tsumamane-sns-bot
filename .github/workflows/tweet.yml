@@ -2,8 +2,8 @@ name: つむまね 自動投稿
 
 on:
   schedule:
-    # 30分ごと（48回/日）- AI自動生成（:00=公式スタイル / :30=個人コメントスタイル）
-    - cron: '*/30 * * * *'
+    # 毎時15分（24回/日）- AI自動生成
+    - cron: '15 * * * *'
   workflow_dispatch:
     inputs:
       type:
@@ -27,7 +27,7 @@ jobs:
       - name: 依存関係をインストール
         run: pip install tweepy yfinance pandas pytz requests beautifulsoup4 anthropic
 
-      # AI自動生成投稿（30分ごと・48回/日）
+      # AI自動生成投稿（毎時15分・24回/日）
       - name: AI自動生成ツイート
         if: >
           (github.event_name == 'schedule') ||
