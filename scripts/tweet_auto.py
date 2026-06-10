@@ -633,7 +633,8 @@ def main():
             if post_attempt < 3:
                 time.sleep(10)
             else:
-                print("3回リトライ失敗 - スキップ（Xサーバー側の問題）")
+                print("3回リトライ失敗 - メール通知します")
+                raise
         except Exception as e:
             print(f"エラー: {type(e).__name__}: {e}")
             raise
