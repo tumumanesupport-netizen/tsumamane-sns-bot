@@ -621,17 +621,26 @@ def main():
 
     print(f"\n投稿内容 ({tw_len(tweet)}w):\n{tweet}\n")
 
-    try:
-        response = twitter_client.create_tweet(text=tweet)
-        print(f"ツイート成功: ID={response.data['id']}")
-    except tweepy.errors.Forbidden as e:
-        print(f"403 Forbidden: {e}")
-        if hasattr(e, "response") and e.response is not None:
-            print(f"  本文: {e.response.text}")
-        raise
-    except Exception as e:
-        print(f"エラー: {type(e).__name__}: {e}")
-        raise
+    import time
+    for post_attempt in range(1, 4):
+        try:
+            response = twitter_client.create_tweet(text=tweet)
+            print(f"ツイート成功: ID={response.data['id']}")
+            break
+        except tweepy.errors.Forbidden as e:
+            print(f"403 Forbidden: {e}")
+            if hasattr(e, "response") and e.response is not None:
+                print(f"  本文: {e.response.text}")
+            raise
+        except tweepy.errors.TwitterServerError as e:
+            print(f"Xサーバーエラー ({post_attempt}/3): {e} - 10秒後にリトライ")
+            if post_attempt < 3:
+                time.sleep(10)
+            else:
+                print("3回リトライ失敗 - スキップ（Xサーバー側の問題）")
+        except Exception as e:
+            print(f"エラー: {type(e).__name__}: {e}")
+            raise
 
 
 if __name__ == "__main__":
