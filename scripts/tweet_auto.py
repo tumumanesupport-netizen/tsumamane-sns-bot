@@ -99,12 +99,15 @@ def get_hour_theme(hour: int) -> dict:
 
 
 def get_post_style(hour: int, minute: int) -> dict:
-    """3スタイルローテーション: 公式 → 個人 → 論争"""
-    index = (hour * 2 + (1 if minute >= 30 else 0)) % 3
+    """6スタイルローテーション: 公式 → 個人(日本株) → 論争 → 公式 → 個人(世界株) → 論争"""
+    index = (hour * 2 + (1 if minute >= 30 else 0)) % 6
     return [
-        {"name": "official", "label": "公式配信スタイル"},
-        {"name": "personal", "label": "個人コメントスタイル"},
-        {"name": "debate",   "label": "論争スタイル"},
+        {"name": "official",        "label": "公式配信スタイル"},
+        {"name": "personal_japan",  "label": "個人コメント(日本株)"},
+        {"name": "debate",          "label": "論争スタイル"},
+        {"name": "official",        "label": "公式配信スタイル"},
+        {"name": "personal_global", "label": "個人コメント(世界株)"},
+        {"name": "debate",          "label": "論争スタイル"},
     ][index]
 
 
@@ -197,6 +200,42 @@ def gather_community_buzz() -> list:
     return result[:15]
 
 
+def gather_japan_stocks_buzz() -> list:
+    """日本株・国内投資トピックのバズ収集"""
+    queries = [
+        "日経平均 急騰 急落 今日", "日本株 注目銘柄 テーマ株",
+        "NISA 日本株 買った 正直", "高配当株 日本 配当利回り おすすめ",
+        "東証 プライム 株価 話題", "半導体 防衛 AI 日本株 テーマ",
+        "日銀 金利 利上げ 株価 影響", "IPO 日本 新規上場 注目",
+        "個人投資家 日本株 体験 実感", "株主優待 おすすめ 人気",
+    ]
+    seen, result = set(), []
+    for q in queries:
+        for t in _fetch_rss_titles(_gnews(q), 2):
+            if t not in seen:
+                seen.add(t)
+                result.append(t)
+    return result[:15]
+
+
+def gather_global_stocks_buzz() -> list:
+    """世界株・海外投資トピックのバズ収集"""
+    queries = [
+        "米国株 S&P500 ナスダック 今日", "FANG GAFAM 株価 動向",
+        "米国株 NISA 買った 正直", "全世界株 オルカン 積立 体験",
+        "ダウ 米国株 急騰 急落", "FRB 利上げ 利下げ 株価 影響",
+        "テスラ エヌビディア アップル 株価", "新興国株 インド ベトナム 投資",
+        "ドル円 為替 海外投資 影響", "米国高配当ETF VYM HDV おすすめ",
+    ]
+    seen, result = set(), []
+    for q in queries:
+        for t in _fetch_rss_titles(_gnews(q), 2):
+            if t not in seen:
+                seen.add(t)
+                result.append(t)
+    return result[:15]
+
+
 # ── PHASE 2: X上のバズ投稿を分析（Basicプラン取得後に有効化）──
 # def get_viral_x_posts() -> list:
 #     bearer_token = os.environ.get("TWITTER_BEARER_TOKEN")
@@ -266,6 +305,98 @@ def _make_prompt_official(market_news, theme, date_str, features_text, body_budg
         "3. 行数は最大6行（空行含む）\n"
         "4. 前の投稿と異なる切り口にすること\n"
         "5. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
+        "本文のみ出力してください。"
+    )
+
+
+def _make_prompt_personal_japan(buzz, market_news, theme, date_str, features_text, body_budget):
+    """個人コメントスタイル（日本株特化）"""
+    buzz_text = "\n".join("・" + b for b in buzz)
+    news_sub  = "\n".join("・" + n for n in market_news[:4])
+    jp_est = body_budget // 2
+    return (
+        "あなたはフォロワー数5万人以上の人気個人投資家インフルエンサーです。\n"
+        "歯に衣着せぬ物言いで支持されており、特に【日本株・国内投資】に詳しいことで知られています。\n"
+        "今は" + date_str + "。テーマ: " + theme["label"] + "\n\n"
+        "━━ 今の日本株・国内投資で話題になっていること ━━\n"
+        + buzz_text + "\n\n"
+        "━━ 今日の市場（参考） ━━\n"
+        + news_sub + "\n\n"
+        "━━ 【絶対厳守】日本株について過激・挑発スタイルで書くこと ━━\n"
+        "おとなしい・丁寧な投稿は厳禁。必ず以下を守ること:\n\n"
+        "【冒頭は必ずこのどれかで始める（必須）】\n"
+        "・「日本株やらないやつの末路、見たくないな」\n"
+        "・「日経平均○○円突破してるのに何もしてない人、大丈夫？」\n"
+        "・「日本株の高配当、正直なめてた」\n"
+        "・「これ言っていいのかわからんけど正直に言う」\n"
+        "・「9割の人が知らない日本株の真実」\n"
+        "・「NISAで日本株を選ばない理由が本当にわからない」\n"
+        "・「日本株投資しない人と投資する人、5年後の差がヤバすぎる」\n\n"
+        "【必ず入れること】\n"
+        "・日経平均・東証・国内銘柄に触れる\n"
+        "・危機感・緊急性（「今すぐ」「手遅れになる前に」）\n"
+        "・具体的な数字で現実を突きつける\n"
+        "・断言・言い切り（「〜だ」「〜しろ」口調）\n"
+        "・絵文字は😤🔥💥😱🤯💸を必ず1個以上使う\n\n"
+        "【絶対NG】\n"
+        "・「〜かもしれません」「〜と思います」などの弱腰表現\n"
+        "・米国株・海外株の話（今回は日本株のみ）\n"
+        "・おとなしくまとめるだけの無難な投稿\n\n"
+        "━━ つむまねの機能を末尾に1文だけ自然に入れること ━━\n"
+        "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に口コミ感覚で紹介（URLは不要）:\n"
+        + features_text + "\n\n"
+        "━━ 生成ルール（厳守） ━━\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
+        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "3. 行数は最大6行（空行含む）\n"
+        "4. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
+        "本文のみ出力してください。"
+    )
+
+
+def _make_prompt_personal_global(buzz, market_news, theme, date_str, features_text, body_budget):
+    """個人コメントスタイル（世界株・海外投資特化）"""
+    buzz_text = "\n".join("・" + b for b in buzz)
+    news_sub  = "\n".join("・" + n for n in market_news[:4])
+    jp_est = body_budget // 2
+    return (
+        "あなたはフォロワー数5万人以上の人気個人投資家インフルエンサーです。\n"
+        "歯に衣着せぬ物言いで支持されており、特に【米国株・世界株・海外投資】に詳しいことで知られています。\n"
+        "今は" + date_str + "。テーマ: " + theme["label"] + "\n\n"
+        "━━ 今の世界株・海外投資で話題になっていること ━━\n"
+        + buzz_text + "\n\n"
+        "━━ 今日の市場（参考） ━━\n"
+        + news_sub + "\n\n"
+        "━━ 【絶対厳守】世界株について過激・挑発スタイルで書くこと ━━\n"
+        "おとなしい・丁寧な投稿は厳禁。必ず以下を守ること:\n\n"
+        "【冒頭は必ずこのどれかで始める（必須）】\n"
+        "・「S&P500に積立してない人、本当に大丈夫？」\n"
+        "・「米国株やらない理由が本当にわかんねえ」\n"
+        "・「全世界株（オルカン）始めてから人生変わった」\n"
+        "・「エヌビディア・テスラ・FANG、正直なめてた」\n"
+        "・「9割の日本人が知らない海外投資の真実」\n"
+        "・「NISAで全世界株を選ばないやつの末路」\n"
+        "・「海外株投資しない人と投資する人、10年後の差がヤバすぎる」\n\n"
+        "【必ず入れること】\n"
+        "・S&P500・ナスダック・全世界株など海外市場に触れる\n"
+        "・為替（ドル円）の影響や海外投資のメリットに言及\n"
+        "・具体的な数字で現実を突きつける\n"
+        "・断言・言い切り（「〜だ」「〜しろ」口調）\n"
+        "・絵文字は😤🔥💥🌍📈を必ず1個以上使う\n\n"
+        "【絶対NG】\n"
+        "・「〜かもしれません」「〜と思います」などの弱腰表現\n"
+        "・日本株・国内株の話（今回は海外株のみ）\n"
+        "・おとなしくまとめるだけの無難な投稿\n\n"
+        "━━ つむまねの機能を末尾に1文だけ自然に入れること ━━\n"
+        "以下の中から最も自然に合う機能を1つ選んで「つむまね」アプリ名と一緒に口コミ感覚で紹介（URLは不要）:\n"
+        + features_text + "\n\n"
+        "━━ 生成ルール（厳守） ━━\n"
+        "1. 【本文のみ】生成する（URLもハッシュタグも含めない・自動で付加します）\n"
+        "2. 本文Twitterウェイトを【" + str(body_budget) + "以内】に収める\n"
+        "   日本語1文字=2、英数字=1、絵文字=2 / 目安: 全角文字" + str(jp_est) + "文字以内\n"
+        "3. 行数は最大6行（空行含む）\n"
+        "4. 投稿文のみ出力（前置き・「投稿文:」などは一切不要）\n\n"
         "本文のみ出力してください。"
     )
 
@@ -368,6 +499,10 @@ def generate_body(market_news, community_buzz, theme, now, style_info, body_budg
 
     if style_name == "official":
         prompt = _make_prompt_official(market_news, theme, date_str, features_text, body_budget)
+    elif style_name == "personal_japan":
+        prompt = _make_prompt_personal_japan(community_buzz, market_news, theme, date_str, features_text, body_budget)
+    elif style_name == "personal_global":
+        prompt = _make_prompt_personal_global(community_buzz, market_news, theme, date_str, features_text, body_budget)
     elif style_name == "personal":
         prompt = _make_prompt_personal(community_buzz, market_news, theme, date_str, features_text, body_budget)
     else:  # debate
@@ -453,8 +588,15 @@ def main():
     print(f"  {now.strftime('%-H:%M')} / {theme['label']} / {style_info['label']}")
     print(f"  本文上限: {budget}w (footer={tw_len(footer)}w)")
 
-    market_news    = gather_market_news()
-    community_buzz = gather_community_buzz() if style_info["name"] in ("personal", "debate") else []
+    market_news = gather_market_news()
+    if style_info["name"] == "personal_japan":
+        community_buzz = gather_japan_stocks_buzz()
+    elif style_info["name"] == "personal_global":
+        community_buzz = gather_global_stocks_buzz()
+    elif style_info["name"] in ("personal", "debate"):
+        community_buzz = gather_community_buzz()
+    else:
+        community_buzz = []
     print(f"  ニュース: {len(market_news)}件 / buzz: {len(community_buzz)}件")
 
     if not market_news:
